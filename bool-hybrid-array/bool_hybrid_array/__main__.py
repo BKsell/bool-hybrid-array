@@ -227,3 +227,18 @@ text =
 positional = ('self','start', 'end'),
 default = {})
 toggle_range([0,0,1],0,1)#输出：翻转 0-1 后： [True, True, 1]
+
+
+#开放ProtectedBuiltinsDict类型（9.9.3+）
+
+Dict = ProtectedBuiltinsDict({'1':1,'2':2},protected_names = ['1','3'],name = 'Dict')
+
+Dict['2'] = 1
+
+print(Dict) #输出：{'1':1,'2':1}
+
+try:Dict['1'] = 2
+except Exception as e:print(e) #输出：禁止修改内置常量：__Dict__.1
+
+
+

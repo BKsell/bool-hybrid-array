@@ -2,7 +2,7 @@ import sys
 from types import ModuleType
 from . import core
 from .core import __builtins__,builtins
-__version__ = "9.9.2"
+__version__ = "9.9.3"
 public_objects = []
 for name in dir(core):
     if not name.startswith("_"):
@@ -19,6 +19,6 @@ try:
     sys.modules[__name__] = ProtectedBuiltinsDict(globals().copy())
     sys.modules[__name__].name = 'bool_hybrid_array'
     core.__dict__ = ProtectedBuiltinsDict(core.__dict__)
-except Exception as e:
+except:
     pass
 

@@ -297,11 +297,12 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __next__(self):
         return next(self.generator)
     def __contains__(self, value) -> bool:
+        if not isinstance(value, (bool,np.bool_,self.Type,BHA_bool)):return False
+        if not self.size:return False
         for i in range(10):
             if self[random.randint(0,self.size-1)] == value:
                 return True
-        if not isinstance(value, (bool,np.bool_,self.Type,BHA_bool)):return False
-        b = any(1 for i in range(self.small.size>>1) if value==self.small[i] or value==self.small[self.small.size-i-1])
+        b = any(1 for i in range(self.small.size+1>>1) if value==self.small[i] or value==self.small[self.small.size-i-1])
         if value == self.is_sparse:
             return self.large or b
         else:
@@ -328,7 +329,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             raise ValueError(f"与运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.and_, self, other),hash_ = self.hash_)
     def __int__(self):
-        if self.size == 0:
+        if not self.size:
             return 0
         return reduce(lambda acc, val: operator.or_(operator.lshift(acc, 1), int(val)),self,0)
     def __or__(self, other) -> BoolHybridArray:
@@ -533,6 +534,7 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
         arr.large = array.array(type_, arr.large)
         if hash_:
             global hybrid_array_cache
+            del hybrid_array_cache[-1]
             hybrid_array_cache = [
                 (ref, h) for ref, h in hybrid_array_cache 
                 if ref() is not None
@@ -545,7 +547,7 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
                     elif arr == existing_array:
                         arr._cached_hash = existing_hash
                         return arr
-                except Exception:
+                except:
                     continue
         return arr
 def TruesArray(size, Type = None, hash_ = True):
@@ -686,12 +688,16 @@ class BHA_Iterator(Iterator,metaclass=ResurrectMeta):
         return BHA_Iterator(map(operator.and_, self, other))
     def __xor__(self,other):
         return BHA_Iterator(map(operator.xor, self, other))
-    def __array__(self,dtype = np.bool_,copy = None):
+    def __array__(self,dtype = None,copy = None):
         arr = np.fromiter(self, dtype=dtype)
         return arr.copy() if copy else arr.view()
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, protected_names = ["T", "F", "BHA_Bool", "BHA_List", "BoolHybridArray", "BoolHybridArr",
+                                "TruesArray", "FalsesArray", "ProtectedBuiltinsDict", "builtins",
+                                "__builtins__", "__dict__","ResurrectMeta","itertools","copy","sys","math",
+                                "weakref","random","array","np","operator","ctypes","types","bisect","protected_names","BHA_Function",
+                                "__class__","Iterator","BHA_Iterator","Generator","Union","_GenericAlias"], name = 'builtins', **kwargs):
         super().__init__(*args, **kwargs)
         try:
             self.__dict__ = self
@@ -699,11 +705,7 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
             self.__builtins__ = self
         except Exception:
             pass
-        self.protected_names = ["T", "F", "BHA_Bool", "BHA_List", "BoolHybridArray", "BoolHybridArr",
-                                "TruesArray", "FalsesArray", "ProtectedBuiltinsDict", "builtins",
-                                "__builtins__", "__dict__","ResurrectMeta","itertools","copy","sys","math",
-                                "weakref","random","array","np","operator","ctypes","types","bisect","protected_names","BHA_Function",
-                                "__class__","Iterator","BHA_Iterator","Generator","Union","_GenericAlias"]
+        self.protected_names = protected_names
     def __setitem__(self, name, value):
         if name in ["T", "F"]:
             current_T = self.get("T")
@@ -711,11 +713,11 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
             if isinstance(current_T, BHA_bool) and isinstance(current_F, BHA_bool):
                 is_swap = (name == "T" and isinstance(value, BHA_bool) and value.value == current_F.value)or(name == "F" and isinstance(value, BHA_bool) and value.value == current_T.value)
                 if is_swap:
-                    print(f"""警告：禁止交换内置常量 __builtins__["{name}"] 和 __builtins__["{'F' if name == 'T' else 'T'}"]！""")
-                    raise AttributeError(f"""禁止交换内置常量 __builtins__["{name}"] 和 __builtins__["{'F' if name == 'T' else 'T'}"]""")
+                    print(f"""警告：禁止交换内置常量 __{self.name}__["{name}"] 和 __builtins__["{'F' if name == 'T' else 'T'}"]！""")
+                    raise AttributeError(f"""禁止交换内置常量 __{self.name}__["{name}"] 和 __{self.name}__["{'F' if name == 'T' else 'T'}"]""")
         if name in self.protected_names and name not in ["T", "F"]:
-            print(f"警告：禁止修改内置常量 __builtins__['{name}']！")
-            raise AttributeError(f"禁止修改内置常量 __builtins__['{name}']")
+            print(f"警告：禁止修改内置常量 __{self.name}__['{name}']！")
+            raise AttributeError(f"禁止修改内置常量 __{self.name}__['{name}']")
         super().__setitem__(name, value)
     def __delitem__(self, name):
         if name in self.protected_names:
@@ -767,5 +769,5 @@ sys.modules['builtins'] = builtins
 builtins.name = 'builtins'
 try:
     sys.flags.optimize = 2
-except Exception:
+except:
     pass

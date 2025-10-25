@@ -1,0 +1,517 @@
+Metadata-Version: 2.4
+Name: bool-hybrid-array
+Version: 9.9.3
+Summary: 一个高效的布尔数组（密集+稀疏混合存储，节省内存）
+Author: 蔡靖杰
+Author-email: 1289270215@qq.com
+Keywords: boolean array,compact storage
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy>=1.19.0
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: keywords
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# BoolHybridArray：高效的布尔混合数组库
+
+一个专为布尔值优化的数组类，能够根据数据特征自动在密集存储和稀疏存储模式间切换，兼顾性能和内存效率。
+
+## ***注：大版本号更新并非不兼容更新，而是重大更新***
+
+***注意：目前社区中若存在名称类似（如包含 “bool-hybrid-array”+ 后缀、boolean\_array、validate.io-boolean-array）的库，均与本项目（bool-hybrid-array）无关联，本项目的所有功能设计、代码实现均为独立开发；***
+***其他平台里的类似名库绝不是我的库***
+
+***注意：若你的原bool-hybrid-array库版本<7.10.9，看到此版本请立即更新到>=7.10.9版本，其他版本的导入都有问题！！！***
+
+作者：蔡靖杰（同维护者，PyPI账号Bkshell）
+
+## 安装方法
+
+使用pip安装：
+
+```bash
+
+pip install bool-hybrid-array
+
+```
+
+## 更新方法
+
+```bash
+
+pip install -U bool-hybrid-array
+
+```
+
+## 核心特性
+
+* **智能存储模式**：数据量小的位置使用密集存储numpy.ndarray数组，
+* 数据量大的位置为稀疏存储array.array稀疏数组
+* 非稀疏模式：数据大部分为非0（True）索引
+* 稀疏模式：数据大部分为0（False）索引
+* BoolHybridArr函数会自动切换
+* **内存高效**：稀疏数据场景下比普通列表节省50%-80%内存
+* **操作便捷**：支持类似列表的索引、切片和赋值操作
+* **快速统计**：内置高效的计数和布尔判断方法
+* **速度优势**：修改元素的时间还不比list慢
+
+## 快速开始
+
+### 基本用法
+
+```python
+
+# 导入类
+
+from bool_hybrid_array import *
+
+# 创建实例
+
+arr = BoolHybridArr([True, False, True, False, True])
+
+arr2 = TruesArray(3)#7.9.0新增
+
+arr3 = FalsesArray(3)#7.9.0新增
+
+# 访问元素
+
+print(arr[0])  # 输出: True；
+
+print(arr[1:4])  # 输出:  BoolHybridArr([False, True, False])；
+
+print(arr2)  # 输出:  BoolHybridArr([True, True, True])；
+
+print(arr3)  # 输出:  BoolHybridArr([False, False, False])；
+```
+
+# 联系方式
+
+* 若遇到 Bug 或有功能建议，可发送邮件至：1289270215@qq.com（更正规）
+* 微信联系：18250730129（注：这是微信绑定的电话号码，优先微信沟通，请勿拨打电话哦）（微信联系回复最快）
+* 抖音（绑定的电话号码同微信）（有讨论群，加入可讨论）
+
+# Git仓库
+
+[bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
+
+# 修改元素
+
+```python
+
+arr[2] = False
+
+print(arr)  # 输出: BoolHybridArr([True, False, False, False, True])
+
+```
+
+### 存储优化
+
+```python
+
+# 创建包含大量布尔值的数组（大部分为False）
+
+big_arr = BoolHybridArr([i % 100 == 0 for i in range(10000)])
+
+# 查看存储模式（此时应为稀疏模式）
+
+print(repr(big_arr))  # 输出: BoolHybridArray(split_index=100,size=10000,is_sparse=True,small_len=100,large_len=)不好意思large_len我不知道
+
+# 自动优化存储
+
+big_arr.optimize()
+
+```
+
+### 其他功能
+
+```python
+
+# 统计True的数量
+
+print(arr.count(True))  # 输出: 2
+
+# 检查是否至少有一个True
+
+print(any(arr))  # 输出: True
+
+# 检查是否全为True
+
+print(all(arr))  # 输出: False
+
+# 复制数组（7.9.1新增）
+
+arr_copy = arr.copy()
+
+arr_copy[0] = False
+
+print(arr[0])      # 输出: True（原数组不变）
+
+print(arr_copy[0]) # 输出: False（拷贝数组已修改）
+
+#寻找一个元素出现的索引(7.9.2新增)
+
+arr_find = BoolHybridArr([i % 2 for i in range(10)])
+
+print(arr_find.find(True))#输出：[1,3,5,7,9]
+
+print(arr_find.find(False))#输出：[2,4,6,8,10]
+
+# 查找第一个/最后一个出现的位置（7.10.3新增）
+
+print(arr_find.index(True))   # 输出：1（第一个True的位置）
+
+print(arr_find.rindex(True))  # 输出：9（最后一个True的位置）
+
+#index/rindex的空数组处理（7.10.4新增）
+
+none_arr =  BoolHybridArr([])
+
+print(none_arr.index(True))#ValueError：无法在空的 BoolHybridArray 中查找元素
+
+#查看是否需要优化（7.10.7新增，7.10.20+能用）
+
+print(big_arr.memory_usage(detail=True))
+'''样例输出（瞎编，但格式是这样）
+{
+    "总占用(字节)": 210,
+    "密集区占用": 180,
+    "稀疏区占用": 30,
+    "对比原生list节省": "99.5%",
+    "对比numpy节省": "79.0%",
+    "是否需要优化": "是",
+    "优化理由/说明": "稀疏区索引密度过高，优化后可转为密集存储提升速度"
+}
+'''
+big_arr.optimize()  # 调用优化方法
+
+print(big_arr.memory_usage(detail=True)["是否需要优化"])#"否"
+
+'''当处理动态变化的布尔数组（如频繁增删元素）时，建议在关键操作后调用memory\_usage(detail=True)检查状态，通过optimize()保持最优性能。'''
+
+#将数组转为int类型（7.11.0新增）：
+
+print(int(arr))#输出：17（0b10001）
+
+#位运算（7.13.0新增）
+
+arr1 = BoolHybridArr([True, False, True, False])  # 0b1010
+
+arr2 = BoolHybridArr([True, True, False, False])   # 0b1100
+
+print(arr1 & arr2)  # 输出：BoolHybridArr([True,False,False,False])  # 0b1000
+
+print(arr1 | arr2)  # 输出：BoolHybridArr([True,True,True,False])  # 0b1110
+
+print([True, False] | arr1[:2])  # 反向运算：[True,False] | [True,False] → [True,False]
+
+print(arr1 ^ arr2)  # 输出：BoolHybridArr([False,True,True,False])  # 0b0110
+
+print(~arr1)  # 输出：BoolHybridArr([False,True,False,True])  # 0b0101（对应整数 ~10 = -11 的二进制布尔逻辑）
+
+arr = BoolHybridArr([True, False, True])  # 0b101
+
+arr <<= 2  # 左移2位：尾部补2个False → [True,False,True,False,False]（0b10100）
+
+print(arr)
+
+arr >>= 3  # 右移3位：尾部删3个元素 → [True,False]（0b10）
+
+print(arr)
+
+print(arr << -1)  # 负数左移：等价于右移1位 → [True]
+
+#兼容numpy数组（8.0.0版本新增）
+
+arr_BoolHybridArray = BoolHybridArr(\[])
+arr_BoolHybridArray <<= 10
+arr_BoolHybridArray <<= 10000
+array_numpy = np.array([arr_BoolHybridArray,arr_BoolHybridArray])
+
+#支持哈希（8.2.0版本新增）
+
+set_ = {arr_BoolHybridArray}#不会报错呦
+
+```
+
+# ***v9.0.0重大更新***
+
+```python
+import numpy as np
+import bool_hybrid_array
+
+_2darr = BHA_List([BoolHybridArr([1,0,0,0,1],Type = BHA_Bool),TruesArray(5,Type = bool),FalsesArray(5,Type = np.bool_)])
+
+print(_2darr)'''输出：
+
+BHA_List([
+BoolHybridArr([True,False,False,False,True]),
+BoolHybridArr([True,True,True,True,True]),
+BoolHybridArr([False,False,False,False,False]),
+])
+'''
+
+#BoolHybridArray是布尔数组，那是什么布尔数组呢？numpy.bool_？原生bool？其他库的布尔类型？还是本库的BHA_Bool？Type参数，支持指定！
+
+#还更新了用BHA_List的排版模拟二维布尔数组！
+
+
+```
+
+# 其他
+
+```python
+
+#二维数组的optimize与memory_usage（9.1.0新增）：
+
+_2darr.optimize()
+
+_2darr.memory_usage(detail=T)
+
+输出格式：
+ {
+"占用(字节)": 【占用内存（字节）】,
+"对比原生list节省": 【6位百分比】,
+"对比numpy节省": 【6位百分比】}
+
+#注：BoolHybridArray的memory_usage的百分比也变成了六位小数
+
+#关闭哈希复用（9.4.0新增）
+
+_2darr2 = BHA_List(BoolHybridArr((i%100 for i in range(1000)),hash_ = F) for i in range(1000))
+
+#关闭哈希复用可以增快创建速度
+
+#ResurrectMeta元类（9.5.0新增）
+
+class MyClass(metaclass=ResurrectMeta):
+	pass
+
+#用装饰器给实例添加动态方法（9.6.0新增）：
+
+arr = BoolHybridArr([T,F,T])
+
+@arr
+def toggle_range(self, start: int, end: int):
+    """翻转从 start 到 end（含）的布尔值"""
+    for i in range(start, end + 1):
+        self[i] = not self[i]  # 通过 self 操作实例的元素
+    print(f"翻转 {start}-{end} 后：", self)
+
+arr.toggle_range(0,1)
+
+print(arr)#输出：翻转 {0}-{1} 后：BoolHybridArr([False,True,True])
+
+toggle_range(arr,0,1)#输出：翻转 {0}-{1} 后：BoolHybridArr([True,False,True])
+
+#view方法（9.7.0新增）：
+
+arr2 = arr.view()
+
+arr2.extend([F,T])
+
+arr2[2] = F
+
+print(arr) #输出：BoolHybridArr([True,False,False,False,True])
+
+#python 3.9以下的版本泛型、联合类型支持（9.8.0新增）
+
+print(BHA_List[BoolHybridArray])#输出：bool_hybrid_array.BHA_List[bool_hybrid_array.BoolHybridArray]
+
+print(BHA_List|BoolHybridArray)#输出：typing.Union[bool_hybrid_array.BHA_List, bool_hybrid_array.BoolHybridArray] （python 3.9以下）或 bool_hybrid_array.BHA_List|bool_hybrid_array.BoolHybridArray（python 3.10以上）
+
+#BHA_Function动态创建函数（9.9.0新增）：
+
+toggle_range = BHA_Function.string_define(
+name = 'toggle_range',
+text = 
+'''
+    for i in range(start, end + 1):
+        self[i] = not self[i]  # 通过 self 操作实例的元素
+    print(f"翻转 {start}-{end} 后：", self)''',
+positional = ('self','start', 'end'),
+default = {})
+toggle_range([0,0,1],0,1)#输出：翻转 0-1 后： [True, True, 1]
+
+#开放ProtectedBuiltinsDict类型（9.9.3+）
+
+Dict = ProtectedBuiltinsDict({'1':1,'2':2},protected_names = ['1','3'],name = 'Dict')
+
+Dict['2'] = 1
+
+print(Dict) #输出：{'1':1,'2':1}
+
+try:Dict['1'] = 2
+except Exception as e:print(e) #输出：禁止修改内置常量：__Dict__.1
+
+
+```
+
+## 性能优势
+
+在包含100万个布尔值且只有10%为True的场景下
+或在包含100万个布尔值且只有10%为False的场景下：
+
+* ###### 普通Python列表：约占用1MB内存
+* BoolHybridArray：约占用100KB内存（节省90%）
+* 随机访问速度基本保持一致
+
+## 版本历史
+
+* **7.8.13**：PyPI上的初始版本，支持基本功能和自动存储优化
+* **7.9.0**：添加TruesArray和FalsesArray
+* **7.9.1**：修复介绍的bug，增加copy功能
+* **7.9.2**：新增find()方法
+* **7.10.0**：优化内部存储，重构密集部分（但使用还是一样）
+* **7.10.1**：与运算和或运算增加异常提醒
+* **7.10.2**：修复了之前所有版本的index错误
+* **7.10.3**：新增rindex
+* **7.10.4**：修正样例代码中的错误，增加index/rindex的空数组处理
+* **7.10.5**：修复7.10.4版本index/rindex中size没加self的错误
+* **7.10.6**：比7.10.0进一步优化内部储存
+* **7.10.7**：新增arr.memory·_usage方法查看是否优化，支持查看内存占用详情及优化建议，配合arr.optimize()实现存储自动调优
+* **7.10.8**：增加cython加速
+* **7.10.9**：修复之前所有版本的导入问题
+* **7.10.10**：修复unit8溢出问题
+* **7.10.11**：尝试修复memory_usage方法的错误
+* **7.10.12**：尝试修复memory_usage方法的错误×2
+* **7.10.13**：尝试修复memory_usage方法的错误×3
+* **7.10.14**：尝试修复unit8溢出问题×2
+* **7.10.15**：尝试修复unit8溢出问题×3
+* **7.10.16**：修复unit8溢出问题×4+尝试修复memory\_usage方法的错误×4
+* **7.10.17**：尝试修复memory_usage方法的错误×4
+* **7.10.18**：尝试修复memory_usage方法的错误×5
+* **7.10.19**：尝试修复memory_usage方法的错误×6
+* **7.10.20**：尝试修复memory_usage方法的错误×7
+* **7.11.0**：新增int功能，把布尔数组转为int类型
+* **7.12.0**：在优化函数中新增应对超级稀疏/超级密集情况的方案
+* **7.13.0**：新增多种位运算功能
+* **7.13.1**：修复普通左移参数为负数时结果错误
+* **7.13.2**：修复左移时的sqrt问题，优化左移
+* **7.13.3**：修复左移的问题
+* **7.13.4**：优化左移
+* **7.13.5**：优化sqrt
+* **7.13.6**：修复7.13.5版本的SyntaxError
+* **7.13.7**：优化__int__方法
+* **7.14.0**：优化密集部分的运算速度
+* **7.14.1**：优化多种位运算方法
+* **7.14.2**：修复7.14.1版本的in的错误
+* **7.14.3**：修复in的错误×2
+* **7.14.4**：修复in的错误×3
+* **7.14.5**：修复in的错误×4
+* **7.14.6**：优化arr.large的类型
+* **8.0.0**：兼容numpy数组
+* **8.0.1**：修复8.0.0兼容numpy数组时没有形状参数的问题
+* **8.0.2**：移除bool_hybrid_dtype，改用object
+* **8.1.0**：利用ctypes加速密集部分的一些方法
+* **8.1.1**：修复8.1.0版本中的“AttributeError: '_CompactBoolArray' object has no attribute 'small'”问题
+* **8.1.2**：修复8.1.1版本中的“TypeError”
+* **8.1.3**：修复8.1.2版本中的“NameError”问题
+* **8.1.4**：修复8.1.3版本中的“TypeError”问题
+* **8.1.5**：修复8.1.4版本中的“AttributeError”问题
+* **8.2.0**：支持哈希
+* **8.2.1**：修复8.2.0版本中的NameError
+* **8.2.2**：修复8.2.1版本中的IndexError
+* **9.0.0**：详情见上
+* **9.0.1**：小更新，优化optimize方法
+* **9.1.0**：新增二维数组的optimize与memory\_usage，优化二维数组的位运算，给BHA\_Bool新增__rand__、**ror**、__rxor__等等
+* **9.1.1**：修复9.1.0版本中的TypeError: unsupported operand type(s) for +: 'int' and 'method'错误
+* **9.1.2**：修复9.1.1版本中的NameError: name 'equivalent\_numpy\_mem' is not defined错误
+* **9.1.3**：修复9.1.2版本中的NameError: name 'need\_optimize' is not defined错误
+* **9.2.0**：详情自己发现，提示：看看iter(arr)的返回值类型、调用一下二维数组的optimize、看看BHA\_Bool是不是一个类
+* **9.3.0**：将find()返回值改为BHA_List，将BHA_Iterator变为可复用迭代器
+* **9.4.0**：新增关闭哈希复用功能
+* **9.4.1**：修复了被修改保护和被删除保护的bug
+* **9.4.2**：修复被修改保护和被删除保护的bug×2
+* **9.4.3**：移除只读辅类
+* **9.4.4**：修复9.4.3版本中的NameError: name 'ReadOnlyAttribute' is not defined错误
+* **9.4.5**：修复9.4.0~9.4.4数组索引访问重点TypeError: 'NoneType' object is not subscriptable
+* **9.4.6**：让切片、位运算的哈希复用状态和self一致
+* **9.5.0**：新增ResurrectMeta元类
+* **9.5.1**：修复9.5.0版本中的ResurrectMeta的实例__repr__无限递归问题
+* **9.5.2**：修复9.5.1版本中的ResurrectMeta的实例__repr__和__str__的无限递归问题
+* **9.6.0**：新增用装饰器给实例添加动态方法的功能
+* **9.6.1**：修复9.6.0中的参数传递问题
+* **9.6.2**：可以使用BHA\_Iterator
+* **9.6.3**：修复常变量删除拦截的逻辑错误
+* **9.6.4**：把常变量删除拦截的逻辑变得更可读
+* **9.6.5**：修复TabError错误
+* **9.6.6**：把常变量删除拦截变得更可读
+* **9.6.7**：修复常变量删除拦截的逻辑错误
+* **9.6.8**：修复常变量删除拦截的逻辑错误
+* **9.6.9**：修复9.6.8中的SyntaxError错误
+* **9.6.10**：修复9.6.9版本中的AttributeError错误
+* **9.6.11**：修复9.6.10版本中的AttributeError: 'dict' object has no attribute '**dict**'. Did you mean: '**dir**'?错误
+* **9.6.12**：修复AttributeError错误
+* **9.6.13**：修复常变量删除拦截的逻辑错误
+* **9.6.14**：修复常变量删除拦截的逻辑错误×2
+* **9.6.15**：修复AttributeError错误
+* **9.6.16**：修复常变量删除拦截的逻辑错误
+* **9.6.17**：类标识错乱修复
+* **9.6.18**：加快了迭代速度
+* **9.6.19**：使用缓存加速
+* **9.6.20**：修复TypeError: unhashable type: 'dict'错误
+* **9.6.21**：修复RecursionError: maximum recursion depth exceeded while calling a Python object错误
+* **9.6.22**：修复RecursionError: maximum recursion depth exceeded while calling a Python object错误×2
+* **9.6.23**：增加了对bool\_hybrid_array.__dict__的防御机制
+* **9.6.23.post1**：修复bool_hybrid_array.__dict__的防御机制的问题
+* **9.6.23.post2**：修复bool_hybrid_array.__dict__的防御机制的问题×2
+* **9.6.23.post3**：修复bool_hybrid_array.__dict__的防御机制的部分逻辑漏洞
+* **9.6.23.post4**：修复bool_hybrid_array.__dict__的防御机制的部分逻辑漏洞×2
+* **9.6.24**：和9.6.23.post4相同，正式版本发布
+* **9.6.25**：增加了对bool\_hybrid\_array里的类的\_\_dict\_\_的防御机制
+* **9.6.25.post1**：修复了“变量名不能以数字开头”的错误
+* **9.6.26**：和9.6.25.post1相同，正式版本发布
+* **9.6.27**：尝试修复T/F相等性判断错误
+* **9.6.27.post1**：尝试修复T/F相等性判断错误×2
+* **9.6.27.post2**：尝试修复T/F相等性判断错误×3
+* **9.6.28**：和* **9.6.27.post2**相同，正式版本发布
+* **9.6.29**：解决了密集区numpy的缓存同步问题和拷贝问题
+* **9.6.30**：增加了”测试代码“文件
+* **9.7.0**：增加了view方法
+* **9.7.1**：修复__array__方法部分的错误
+* **9.7.2**：修复9.7.1版本中numpy 2.0对__array__方法参数的警告
+* **9.7.3**：解决np.array(arr)解释器莫名其妙退出的问题
+* **9.8.0**：增加python 3.9以下的版本泛型、联合类型支持
+* **9.8.1**：让python 3.10+版本泛型、联合类型分别为types.UnionType和types.GenericAlias
+* **9.8.2**：修复9.8.1版本中联合类型返回值的错误
+* **9.9.0**：新增BHA_Function动态创建函数的功能
+* **9.9.1**：增加一下保护字典的保护名单
+* **9.9.2**：加快了any和all的速度
+* **9.9.3**：开放ProtectedBuiltinsDict类型
+
+
+
+
+## **彩蛋：**
+
+* Q：为什么要“密集+稀疏？”
+* A：因为在做线性筛的时候遇到了个问题：密集数组太占内存，稀疏数组跑起来卡，所以就做了这个
+* Q：为什么要“密集`numpy.ndarray`，稀疏`array.array`”？
+* A：因为他本来只做线性筛，只修改数组，不`insert`、`pop`、`remove`;稀疏区长度变化平凡，要`numpy.ndarray`的“**修改就创建新实例**”的话那炸了，所以用`array.array`,密集区长度不变；所以可以用更高效的`numpy.ndarray`
+* Q：为什么要有`TruesArray`/`FalsesArray`？直接用`BoolHybridArr([True]*n)`/`BoolHybridArr([False]*n)`不行吗？
+* A：因为`BoolHybridArr([True]*n`)在计算`[True]*n`时如果n太大，那么列表的内存会溢出
+* Q：**`BoolHybridArr`**和**`BoolHybridArray`**有什么区别？
+* A：BoolHybridArray是本库中的**核心类**，所有函数都是围绕他进行的，但需要`split_index`,`size`,`is_sparse`；
+  BoolHybridArr是一个**函数**，用于把一个可迭代对象转为`BoolHybridArray`类
+* Q：为什么不建议把太大的本类型数组打印？
+* A：虽然本类型数组省内存，但字符串不省内存，一个`True`要4字节，一个`False`要5字节，连逗号都要占1字节（`numpy.ndarray`：我都比字符串省内存）
+
+## 源代码和原理
+
+请见[来看看我自己的布尔数组吧！](https://code.xdf.cn/freecode/editor?no=80cd07aa023fb2448069e6d8dd50bb5d&type=2&org=code)
+
+## 许可证
+
+本项目采用**MIT许可证**，详情参见**LICENSE文件**。
+

@@ -8,7 +8,7 @@ def get_long_description():
     return "一个高效的布尔数组（密集+稀疏混合存储，节省内存）"
 setup(
     name="bool-hybrid-array",
-    version="9.9.2",
+    version="9.9.3",
     author="蔡靖杰",
     author_email="1289270215@qq.com",
     description="一个高效的布尔数组（密集+稀疏混合存储，节省内存）",
