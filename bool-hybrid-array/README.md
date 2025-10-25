@@ -53,7 +53,7 @@ from bool_hybrid_array import *
 
 # 创建实例
 
-arr = BoolHybridArr(\[True, False, True, False, True])
+arr = BoolHybridArr([True, False, True, False, True])
 
 arr2 = TruesArray(3)#7.9.0新增
 
@@ -63,21 +63,22 @@ arr3 = FalsesArray(3)#7.9.0新增
 
 print(arr[0])  # 输出: True；
 
-print(arr[1:4])  # 输出:  BoolHybridArr(\[False, True, False])；
+print(arr[1:4])  # 输出:  BoolHybridArr([False, True, False])；
 
-print(arr2)  # 输出:  BoolHybridArr(True, True, True])；
+print(arr2)  # 输出:  BoolHybridArr([True, True, True])；
 
-print(arr3)  # 输出:  BoolHybridArr(\[False, False, False])；
+print(arr3)  # 输出:  BoolHybridArr([False, False, False])；
 ```
 
 # 联系方式
 
 * 若遇到 Bug 或有功能建议，可发送邮件至：1289270215@qq.com（更正规）
 * 微信联系：18250730129（注：这是微信绑定的电话号码，优先微信沟通，请勿拨打电话哦）（微信联系回复最快）
+* 抖音（绑定的电话号码同微信）（有讨论群，加入可讨论）
 
-#Git仓库
+# Git仓库
 
-[bool-hybrid-array.git](https://github.com/Bkshell/bool-hybrid-array.git)
+[bool-hybrid-array.git](https://github.com/BKshell/bool-hybrid-array.git)
 
 # 修改元素
 
@@ -85,7 +86,7 @@ print(arr3)  # 输出:  BoolHybridArr(\[False, False, False])；
 
 arr[2] = False
 
-print(arr)  # 输出: BoolHybridArr(\[True, False, False, False, True])
+print(arr)  # 输出: BoolHybridArr([True, False, False, False, True])
 
 ```
 
@@ -450,6 +451,7 @@ toggle_range([0,0,1],0,1)#输出：翻转 0-1 后： [True, True, 1]
 * **9.8.2**：修复9.8.1版本中联合类型返回值的错误
 * **9.9.0**：新增BHA_Function动态创建函数的功能
 * **9.9.1**：增加一下保护字典的保护名单
+* **9.9.2**：加快了any和all的速度
 
 
 
