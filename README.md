@@ -76,6 +76,10 @@ print(arr3)  # 输出:  BoolHybridArr([False, False, False])；
 * 微信联系：18250730129（注：这是微信绑定的电话号码，优先微信沟通，请勿拨打电话哦）（微信联系回复最快）
 * 抖音（绑定的电话号码同微信）（有讨论群，加入可讨论）
 
+# Git仓库
+
+[bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
+
 # 修改元素
 
 ```python
@@ -232,7 +236,7 @@ BoolHybridArr([False,False,False,False,False]),
 ])
 '''
 
-#BoolHybridArray是布尔数组，那是什么布尔数组呢？numpy.bool\_？原生bool？其他库的布尔类型？还是本库的BHA\_Bool？Type参数，支持指定！
+#BoolHybridArray是布尔数组，那是什么布尔数组呢？numpy.bool_？原生bool？其他库的布尔类型？还是本库的BHA_Bool？Type参数，支持指定！
 
 #还更新了用BHA_List的排版模拟二维布尔数组！
 
@@ -313,6 +317,17 @@ text =
 positional = ('self','start', 'end'),
 default = {})
 toggle_range([0,0,1],0,1)#输出：翻转 0-1 后： [True, True, 1]
+
+#开放ProtectedBuiltinsDict类型（9.9.3+）
+
+Dict = ProtectedBuiltinsDict({'1':1,'2':2},protected_names = ['1','3'],name = 'Dict')
+
+Dict['2'] = 1
+
+print(Dict) #输出：{'1': 1, '2': 1, 'builtins': {...}, '__builtins__': {...}, 'protected_names': ['1', '3']}
+
+try:Dict['1'] = 2
+except Exception as e:print(e) #输出：禁止修改内置常量：__Dict__['1']
 
 
 ```
@@ -448,6 +463,7 @@ toggle_range([0,0,1],0,1)#输出：翻转 0-1 后： [True, True, 1]
 * **9.9.0**：新增BHA_Function动态创建函数的功能
 * **9.9.1**：增加一下保护字典的保护名单
 * **9.9.2**：加快了any和all的速度
+* **9.9.3**：开放ProtectedBuiltinsDict类型
 
 
 
@@ -473,5 +489,4 @@ toggle_range([0,0,1],0,1)#输出：翻转 0-1 后： [True, True, 1]
 ## 许可证
 
 本项目采用**MIT许可证**，详情参见**LICENSE文件**。
-
 
