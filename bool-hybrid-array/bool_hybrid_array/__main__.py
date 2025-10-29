@@ -238,7 +238,26 @@ Dict['2'] = 1
 print(Dict) #输出：{'1':1,'2':1}
 
 try:Dict['1'] = 2
-except Exception as e:print(e) #输出：禁止修改内置常量：__Dict__.1
+except Exception as e:print(e) #输出：禁止修改内置常量：__Dict__['1']
+
+#Ask_BHA和Create_BHA（9.10.0新增）：
+
+arr = BoolHybridArr([T,F,F,F,T,T,F,F,F,T])
+arr2 = BoolHybridArr([F,F,F,F,T,T,F,T,T,F])
+
+arr3 = BHA_List([arr,arr2])
+
+Create_BHA("single_bool_array",arr3)#自动生成single_bool_array.bha文件
+
+print(Ask_BHA("single_bool_array"))
+
+'''
+输出：
+BHA_List([
+BoolHybridArr([True,False,False,False,True,True,False,False,False,True]),
+BoolHybridArr([False,False,False,False,True,True,False,True,True,False]),
+])
+'''
 
 
 

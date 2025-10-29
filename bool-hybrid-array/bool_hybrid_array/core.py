@@ -699,12 +699,11 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
                                 "weakref","random","array","np","operator","ctypes","types","bisect","protected_names","BHA_Function",
                                 "__class__","Iterator","BHA_Iterator","Generator","Union","_GenericAlias"], name = 'builtins', **kwargs):
         super().__init__(*args, **kwargs)
-        try:
-            self.__dict__ = self
-            self.builtins = self
-            self.__builtins__ = self
-        except Exception:
-            pass
+        if name == 'builtins':
+            super().__setattr__('__dict__',self)
+            super().__setattr__('builtins',self)
+            super().__setattr__('__builtins__',self)
+        self.name = name
         self.protected_names = protected_names
     def __setitem__(self, name, value):
         if name in ["T", "F"]:
@@ -742,6 +741,33 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
             raise AttributeError(f'禁止修改内置常量：{self.name}.{name}')
         else:
             super().__setattr__(name,value)
+def Ask_arr(arr):
+    if isinstance(arr,BHA_List):
+        return '\n'.join(map(Ask_arr,arr))
+    elif isinstance(arr,BoolHybridArray):
+        h = hex(arr)[2:]
+        h = '0'*(arr.size - len(h))+h
+        return h
+    else:
+        return str(arr)
+def Ask_BHA(path):
+    if '.bha' not in path.lower():
+        path += '.bha'
+    with open(path,'a+',encoding = 'utf-8') as f:
+        f.seek(0)
+        temp = f.read().strip()
+        if not temp:return TruesArray(0)
+        temp = temp.split()
+        temp2 = lambda x:BoolHybridArr(map(int,'0'*(len(x) - len(x.lstrip('0')))+bin(int(x,base = 16))[2:]))
+        temp = BHA_List(map(temp2,temp))
+        if len(temp) == 1:
+            return temp[0]
+        return temp
+def Create_BHA(path,text):
+    if '.bha' not in path.lower():
+        path += '.bha'
+    with open(path,'w+',encoding = 'utf-8') as f:
+        f.write(Ask_arr(text))
 builtins.np = np
 builtins.T = BHA_bool(1)
 builtins.F = BHA_bool(0)
@@ -756,6 +782,8 @@ builtins.BHA_Bool.T,builtins.BHA_Bool.F = BHA_bool(1),BHA_bool(0)
 builtins.ResurrectMeta = ResurrectMeta
 builtins.ProtectedBuiltinsDict = ProtectedBuiltinsDict
 builtins.BHA_Function = BHA_Function
+builtins.Ask_BHA = Ask_BHA
+builtins.Create_BHA = Create_BHA
 Tid,Fid = id(T),id(F)
 original_id = builtins.id
 def fake_id(obj):
