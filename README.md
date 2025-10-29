@@ -76,7 +76,7 @@ print(arr3)  # 输出:  BoolHybridArr([False, False, False])；
 * 微信联系：18250730129（注：这是微信绑定的电话号码，优先微信沟通，请勿拨打电话哦）（微信联系回复最快）
 * 抖音（绑定的电话号码同微信）（有讨论群，加入可讨论）
 
-# Git仓库
+# GitHub仓库
 
 [bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
 
@@ -324,11 +324,29 @@ Dict = ProtectedBuiltinsDict({'1':1,'2':2},protected_names = ['1','3'],name = 'D
 
 Dict['2'] = 1
 
-print(Dict) #输出：{'1': 1, '2': 1, 'builtins': {...}, '__builtins__': {...}, 'protected_names': ['1', '3']}
+print(Dict) #输出：{'1': 1, '2': 1}
 
 try:Dict['1'] = 2
 except Exception as e:print(e) #输出：禁止修改内置常量：__Dict__['1']
 
+#Ask_BHA和Create_BHA（9.10.0新增）：
+
+arr = BoolHybridArr([T,F,F,F,T,T,F,F,F,T])
+arr2 = BoolHybridArr([F,F,F,F,T,T,F,T,T,F])
+
+arr3 = BHA_List([arr,arr2])
+
+Create_BHA("single_bool_array",arr3)#自动生成single_bool_array.bha文件
+
+print(Ask_BHA("single_bool_array"))
+
+'''
+输出：
+BHA_List([
+BoolHybridArr([True,False,False,False,True,True,False,False,False,True]),
+BoolHybridArr([False,False,False,False,True,True,False,True,True,False]),
+])
+'''
 
 ```
 
@@ -464,6 +482,7 @@ except Exception as e:print(e) #输出：禁止修改内置常量：__Dict__['1'
 * **9.9.1**：增加一下保护字典的保护名单
 * **9.9.2**：加快了any和all的速度
 * **9.9.3**：开放ProtectedBuiltinsDict类型
+* **9.10.0**：新增Ask_BHA和Create_BHA
 
 
 
