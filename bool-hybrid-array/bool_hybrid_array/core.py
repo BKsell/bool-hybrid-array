@@ -62,11 +62,21 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
             raise AttributeError(f'禁止删除属性：{name}')
         else:
             super().__delattr__(name)
-    def __or__(self,other):
-        return Union[self,other]
+    if 'UnionType' not in types.__dict__:
+        def __or__(self,other):
+            return Union[self,other]
+        __ror__ = __or__
     def __getitem__(self,*args):
         return _GenericAlias(self,args)
-    __ror__ = __or__
+    x = None
+    original_dict = {"__delattr__":__delattr__,"__getitem__":__getitem__,"__setattr__":__setattr__,"__hash__":__hash__,
+    "__new__":__new__,"__del__":__del__,"__str__":__str__,"__repr__":__repr__,"__class__":abc.ABCMeta}
+    try:
+        original_dict["__ror__"] = __ror__
+        original_dict["__or__"] = __or__
+    except:
+        pass
+ResurrectMeta.__class__ = ResurrectMeta
 class BHA_Function(metaclass=ResurrectMeta):
     def __init__(self,v):
         self.data,self.module = v,__name__
@@ -745,8 +755,8 @@ def Ask_arr(arr):
     if isinstance(arr,BHA_List):
         return '\n'.join(map(Ask_arr,arr))
     elif isinstance(arr,BoolHybridArray):
-        h = hex(arr)[2:]
-        h = '0'*(arr.size - len(h))+h
+        h = hex(int(arr))[2:]
+        h = '0'*(arr.size - len(bin(int(arr)))+2)+h
         return h
     else:
         return str(arr)
@@ -757,7 +767,7 @@ def Ask_BHA(path):
         f.seek(0)
         temp = f.read().strip()
         if not temp:return TruesArray(0)
-        temp = temp.split()
+        temp = temp.strip().split()
         temp2 = lambda x:BoolHybridArr(map(int,'0'*(len(x) - len(x.lstrip('0')))+bin(int(x,base = 16))[2:]))
         temp = BHA_List(map(temp2,temp))
         if len(temp) == 1:
