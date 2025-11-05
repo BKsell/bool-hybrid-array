@@ -78,7 +78,8 @@ print(arr3)  # 输出:  BoolHybridArr([False, False, False])；
 
 # GitHub仓库
 
-[bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
+英文版：[bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
+中文版：[1083175506-bool-hybrid-array](https://www.github-zh.com/projects/1083175506-bool-hybrid-array)
 
 # 修改元素
 
