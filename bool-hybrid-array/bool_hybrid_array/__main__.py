@@ -259,5 +259,9 @@ BoolHybridArr([False,False,False,False,True,True,False,True,True,False]),
 ])
 '''
 
+#numba_opt函数优化（9.10.4版本新增）
+try:numba_opt()
+except:print("请先安装numba库！！！")
+
 
 

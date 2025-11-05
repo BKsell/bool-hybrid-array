@@ -16,6 +16,7 @@ if 'UnionType' in types.__dict__:
 if 'GenericAlias' in types.__dict__:
     _GenericAlias = types.GenericAlias
 class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
+    __module__ = 'bool_hybrid_array'
     def __new__(cls, name, bases, namespace):
         meta_bases = tuple(type(base) for base in bases)
         if cls not in meta_bases:
@@ -45,7 +46,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
             print(f'警告：禁止删除常变量：{cls}！')
             raise TypeError(f'禁止删除常变量：{cls}')
     def __hash__(cls):
-        return hash(cls.name)
+        return hash(str(cls))
     def __setattr__(cls,name,value):
         if not hasattr(cls, 'x'):
             super().__setattr__(name,value)
@@ -70,8 +71,9 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
         return _GenericAlias(self,args)
     x = None
     original_dict = {"__delattr__":__delattr__,"__getitem__":__getitem__,"__setattr__":__setattr__,"__hash__":__hash__,
-    "__new__":__new__,"__del__":__del__,"__str__":__str__,"__repr__":__repr__,"__class__":abc.ABCMeta}
+    "__new__":__new__,"__del__":__del__,"__str__":__str__,"__repr__":__repr__,"__class__":abc.ABCMeta,"original_dict":None}
     try:
+        original_dict["original_dict"] = original_dict
         original_dict["__ror__"] = __ror__
         original_dict["__or__"] = __or__
     except:
@@ -707,7 +709,8 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
                                 "TruesArray", "FalsesArray", "ProtectedBuiltinsDict", "builtins",
                                 "__builtins__", "__dict__","ResurrectMeta","itertools","copy","sys","math",
                                 "weakref","random","array","np","operator","ctypes","types","bisect","protected_names","BHA_Function",
-                                "__class__","Iterator","BHA_Iterator","Generator","Union","_GenericAlias"], name = 'builtins', **kwargs):
+                                "__class__","Iterator","BHA_Iterator","Generator","Union","_GenericAlias","Ask_BHA","Create_BHA","Ask_arr","numba_opt"],
+                 name = 'builtins', **kwargs):
         super().__init__(*args, **kwargs)
         if name == 'builtins':
             super().__setattr__('__dict__',self)
@@ -768,7 +771,7 @@ def Ask_BHA(path):
         temp = f.read().strip()
         if not temp:return TruesArray(0)
         temp = temp.strip().split()
-        temp2 = lambda x:BoolHybridArr(map(int,'0'*(len(x) - len(x.lstrip('0')))+bin(int(x,base = 16))[2:]))
+        temp2 = lambda x:BoolHybridArr(map(int,'0'*(len(x) - len(x.lstrip('0')))+bin(int(x,base = 16))[2:]),hash_ = F)
         temp = BHA_List(map(temp2,temp))
         if len(temp) == 1:
             return temp[0]
@@ -778,6 +781,30 @@ def Create_BHA(path,text):
         path += '.bha'
     with open(path,'w+',encoding = 'utf-8') as f:
         f.write(Ask_arr(text))
+def numba_opt():
+    import numba
+    sig = numba.types.Union([
+        numba.types.intp(
+            numba.types.Array(numba.types.uint32, 1, 'C'),
+            numba.types.uint32,
+            numba.types.uint32,
+            numba.types.Optional(numba.types.uint32)
+        ),
+        numba.types.intp(
+            numba.types.Array(numba.types.uint64, 1, 'C'),
+            numba.types.uint64,
+            numba.types.uint64,
+            numba.types.Optional(numba.types.uint64)
+        ),
+        numba.types.intp(
+            numba.types.Any,
+            numba.types.Any,
+            numba.types.Any,
+            numba.types.Optional(numba.types.Any)
+        )
+    ])
+    bisect.bisect_left = numba.njit(sig, cache=True)(bisect.bisect_left)
+    bisect.bisect_right = numba.njit(sig, cache=True)(bisect.bisect_right)
 builtins.np = np
 builtins.T = BHA_bool(1)
 builtins.F = BHA_bool(0)
@@ -794,6 +821,7 @@ builtins.ProtectedBuiltinsDict = ProtectedBuiltinsDict
 builtins.BHA_Function = BHA_Function
 builtins.Ask_BHA = Ask_BHA
 builtins.Create_BHA = Create_BHA
+builtins.numba_opt = numba_opt
 Tid,Fid = id(T),id(F)
 original_id = builtins.id
 def fake_id(obj):

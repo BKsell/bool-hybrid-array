@@ -348,6 +348,10 @@ BoolHybridArr([False,False,False,False,True,True,False,True,True,False]),
 ])
 '''
 
+#numba_opt函数优化（9.10.4版本新增）
+try:numba_opt()
+except:print("请先安装numba库！！！")
+
 ```
 
 ## 性能优势
@@ -486,6 +490,7 @@ BoolHybridArr([False,False,False,False,True,True,False,True,True,False]),
 * **9.10.1**：修复TypeError: 'BoolHybridArray' object cannot be interpreted as an integer的错误
 * **9.10.2**：解决多补前导零的问题
 * **9.10.3**：解决少补前导零的问题
+* **9.10.4**：新增numba_opt功能
 
 
 
