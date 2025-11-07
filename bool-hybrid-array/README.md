@@ -78,7 +78,8 @@ print(arr3)  # 输出:  BoolHybridArr([False, False, False])；
 
 # GitHub仓库
 
-[bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
+英文版：[bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
+中文版：[1083175506-bool-hybrid-array](https://www.github-zh.com/projects/1083175506-bool-hybrid-array)
 
 # 修改元素
 
@@ -491,7 +492,7 @@ except:print("请先安装numba库！！！")
 * **9.10.2**：解决多补前导零的问题
 * **9.10.3**：解决少补前导零的问题
 * **9.10.4**：新增numba_opt功能
-
+* **9.10.5**：新增BHA_Opener工具包
 
 
 ## **彩蛋：**

@@ -707,9 +707,9 @@ class BHA_Iterator(Iterator,metaclass=ResurrectMeta):
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
     def __init__(self, *args, protected_names = ["T", "F", "BHA_Bool", "BHA_List", "BoolHybridArray", "BoolHybridArr",
                                 "TruesArray", "FalsesArray", "ProtectedBuiltinsDict", "builtins",
-                                "__builtins__", "__dict__","ResurrectMeta","itertools","copy","sys","math",
-                                "weakref","random","array","np","operator","ctypes","types","bisect","protected_names","BHA_Function",
-                                "__class__","Iterator","BHA_Iterator","Generator","Union","_GenericAlias","Ask_BHA","Create_BHA","Ask_arr","numba_opt"],
+                                "__builtins__", "__dict__","ResurrectMeta","math",
+                                "np","protected_names","BHA_Function",
+                                "__class__","Ask_BHA","Create_BHA","Ask_arr","numba_opt"],
                  name = 'builtins', **kwargs):
         super().__init__(*args, **kwargs)
         if name == 'builtins':
