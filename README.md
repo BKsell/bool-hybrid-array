@@ -4,7 +4,7 @@
 
 ## ***注：大版本号更新并非不兼容更新，而是重大更新***
 
-***注意：目前社区中若存在名称类似（如包含 “bool-hybrid-array”+ 后缀、boolean\_array、validate.io-boolean-array）的库，均与本项目（bool-hybrid-array）无关联，本项目的所有功能设计、代码实现均为独立开发；***
+***注意：目前社区中若存在名称类似（如包含 “bool-hybrid-array”+ 后缀、boolean_array、validate.io-boolean-array）的库，均与本项目（bool-hybrid-array）无关联，本项目的所有功能设计、代码实现均为独立开发；***
 ***其他平台里的类似名库绝不是我的库***
 
 ***注意：若你的原bool-hybrid-array库版本<7.10.9，看到此版本请立即更新到>=7.10.9版本，其他版本的导入都有问题！！！***
