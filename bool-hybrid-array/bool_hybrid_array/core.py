@@ -2,7 +2,7 @@ from __future__ import annotations
 import builtins
 import array,bisect,numpy as np
 from collections.abc import MutableSequence,Iterable,Generator,Iterator,Sequence
-import itertools,copy,sys,math,weakref,random
+import itertools,copy,sys,math,weakref,random,mmap,os
 from functools import reduce
 import operator,ctypes,gc,abc,types
 from functools import lru_cache
@@ -17,6 +17,7 @@ if 'GenericAlias' in types.__dict__:
     _GenericAlias = types.GenericAlias
 class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
     __module__ = 'bool_hybrid_array'
+    name = 'ResurrectMeta'
     def __new__(cls, name, bases, namespace):
         meta_bases = tuple(type(base) for base in bases)
         if cls not in meta_bases:
@@ -46,7 +47,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
             print(f'警告：禁止删除常变量：{cls}！')
             raise TypeError(f'禁止删除常变量：{cls}')
     def __hash__(cls):
-        return hash(str(cls))
+        return hash(cls.name+cls.__module__)
     def __setattr__(cls,name,value):
         if not hasattr(cls, 'x'):
             super().__setattr__(name,value)
@@ -766,11 +767,18 @@ def Ask_arr(arr):
 def Ask_BHA(path):
     if '.bha' not in path.lower():
         path += '.bha'
-    with open(path,'a+',encoding = 'utf-8') as f:
+    with open(path, 'a+b') as f:
         f.seek(0)
-        temp = f.read().strip()
-        if not temp:return TruesArray(0)
-        temp = temp.strip().split()
+        file_size = os.fstat(f.fileno()).st_size
+        if not file_size:
+            return TruesArray(0)
+        if os.name == 'nt':
+            mm = mmap.mmap(f.fileno(), file_size, access=mmap.ACCESS_READ)
+        else:
+            mm = mmap.mmap(f.fileno(), file_size, flags=mmap.MAP_PRIVATE, prot=mmap.PROT_READ)
+        with mm:
+            temp = mm.read().decode('utf-8').strip()
+        temp = temp.split()
         temp2 = lambda x:BoolHybridArr(map(int,'0'*(len(x) - len(x.lstrip('0')))+bin(int(x,base = 16))[2:]),hash_ = F)
         temp = BHA_List(map(temp2,temp))
         if len(temp) == 1:

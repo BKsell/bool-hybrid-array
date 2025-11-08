@@ -1,9 +1,13 @@
 Metadata-Version: 2.4
 Name: bool-hybrid-array
-Version: 9.10.5
+Version: 9.10.7
 Summary: 一个高效的布尔数组（密集+稀疏混合存储，节省内存）
+Home-page: https://github.com/BKsell/bool-hybrid-array
 Author: 蔡靖杰
 Author-email: 1289270215@qq.com
+Project-URL: GitHub 主站, https://github.com/BKsell/bool-hybrid-array
+Project-URL: GitHub 中文镜像, https://www.github-zh.com/projects/1083175506-bool-hybrid-array
+Project-URL: Issue 反馈（主站）, https://github.com/你的用户名/bool-hybrid-array/issues
 Keywords: boolean array,compact storage
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
@@ -17,8 +21,10 @@ Dynamic: author-email
 Dynamic: classifier
 Dynamic: description
 Dynamic: description-content-type
+Dynamic: home-page
 Dynamic: keywords
 Dynamic: license-file
+Dynamic: project-url
 Dynamic: requires-dist
 Dynamic: requires-python
 Dynamic: summary
@@ -518,6 +524,11 @@ except:print("请先安装numba库！！！")
 * **9.10.3**：解决少补前导零的问题
 * **9.10.4**：新增numba_opt功能
 * **9.10.5**：新增BHA_Opener工具包
+* **9.10.6**：给Ask_BHA新增了mmap优化
+* **9.10.7**：修复了RecursionError: maximum recursion depth exceeded错误
+
+
+
 
 
 ## **彩蛋：**
