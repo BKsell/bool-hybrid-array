@@ -493,6 +493,11 @@ except:print("请先安装numba库！！！")
 * **9.10.3**：解决少补前导零的问题
 * **9.10.4**：新增numba_opt功能
 * **9.10.5**：新增BHA_Opener工具包
+* **9.10.6**：给Ask_BHA新增了mmap优化
+* **9.10.7**：修复了RecursionError: maximum recursion depth exceeded错误
+
+
+
 
 
 ## **彩蛋：**
