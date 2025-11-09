@@ -495,6 +495,8 @@ except:print("请先安装numba库！！！")
 * **9.10.5**：新增BHA_Opener工具包
 * **9.10.6**：给Ask_BHA新增了mmap优化
 * **9.10.7**：修复了RecursionError: maximum recursion depth exceeded错误
+* **9.10.8**：给Create_BHA新增了mmap优化
+* **9.10.9**：修复9.10.8版本中的NameError错误
 
 
 

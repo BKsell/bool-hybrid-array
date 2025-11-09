@@ -784,11 +784,21 @@ def Ask_BHA(path):
         if len(temp) == 1:
             return temp[0]
         return temp
-def Create_BHA(path,text):
+def Create_BHA(path,arr):
     if '.bha' not in path.lower():
         path += '.bha'
-    with open(path,'w+',encoding = 'utf-8') as f:
-        f.write(Ask_arr(text))
+    temp = Ask_arr(arr).strip().encode('utf-8')
+    with open(path, "w+b") as f:
+        f.truncate(len(temp))
+        if not len(temp):
+            return
+        with mmap.mmap(
+            f.fileno(),
+            length=len(temp),
+            access=mmap.ACCESS_WRITE
+        ) as mm:
+            mm[:] = temp
+            mm.flush()
 def numba_opt():
     import numba
     sig = numba.types.Union([
