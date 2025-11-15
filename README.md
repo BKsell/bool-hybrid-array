@@ -519,6 +519,8 @@ except OverflowError as e:
 * **9.10.11**：修复NameError: name 'int_array' is not defined. Did you mean: 'bytearray'?的错误
 * **9.10.12**：把find方法的返回值改为IntHybridArray
 * **9.10.13**：给IntHybridArray新增多种列表操作
+* **9.10.14**：修复IntHybridArray中因单个 0 导致所有数字位长被压缩到 1的问题
+* **9.10.15**：修复IntHybridArray变成布尔数组的错误
 
 
 
