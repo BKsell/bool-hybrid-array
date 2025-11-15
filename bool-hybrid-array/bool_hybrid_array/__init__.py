@@ -3,7 +3,7 @@ from types import ModuleType
 from . import core
 from .core import __builtins__,builtins
 from . import int_array
-__version__ = "9.10.12"
+__version__ = "9.10.13"
 public_objects = []
 for name in dir(core):
     if not name.startswith("_"):

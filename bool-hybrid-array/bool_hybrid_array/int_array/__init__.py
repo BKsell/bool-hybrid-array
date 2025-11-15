@@ -8,7 +8,8 @@ class IntBitTag(BHA_Bool, metaclass=ResurrectMeta):
     __repr__ = __str__
 
 class IntHybridArray(BoolHybridArray):
-    def __init__(self, int_array: list[int], bit_length: int = 8):
+    def __init__(self, int_array: list[int], bit_length: int = 8, Type = int):
+        self.Type = Type
         self.bit_length = bit_length
         bool_data = []
         max_required_bits = 1
@@ -92,9 +93,10 @@ class IntHybridArray(BoolHybridArray):
         if block_end > self.size:
             raise IndexError("索引超出范围")
         bit_chunk = [super().__getitem__(j) for j in range(block_start, block_end)]
-        return self.to_int(bit_chunk)
+        return self.Type(self.to_int(bit_chunk))
 
     def __setitem__(self, key, value):
+
         value = int(value)
         if isinstance(key, slice):
             start, stop, step = key.indices(len(self))
@@ -146,17 +148,94 @@ class IntHybridArray(BoolHybridArray):
         bool_data = [sign_bit] + num_bits
         for bit_idx in range(self.bit_length):
             super().__setitem__(block_start + bit_idx, bool_data[bit_idx])
-
+    def insert(self, index, value):
+        value = int(value)
+        index = index if index >= 0 else index + len(self)
+        if not (0 <= index <= len(self)):
+            raise IndexError("插入索引超出范围")
+        if value == 0:
+            required_bits = 1
+        else:
+            required_bits = 1 + abs(value).bit_length()
+        need_resize = required_bits > self.bit_length
+        old_data = list(self) if need_resize else None
+        if need_resize:
+            self.bit_length = required_bits
+            self.total_bits = 0
+            super().__init__(0, 0, False, IntBitTag, False)
+            for num in old_data[:index]:
+                self._add_single_num(num)
+            self._add_single_num(value)
+            for num in old_data[index:]:
+                self._add_single_num(num)
+        else:
+            insert_bit_start = index * self.bit_length
+            if value >= 0:
+                sign_bit = False
+                num_bits = [bool((num >> i) & 1) for i in range(self.bit_length - 1)]
+            else:
+                sign_bit = True
+                abs_num = abs(value)
+                num_bits = [not bool((abs_num >> i) & 1) for i in range(self.bit_length - 1)]
+                carry = 1
+                for j in range(len(num_bits)):
+                    if carry:
+                        num_bits[j] = not num_bits[j]
+                        carry = 0 if num_bits[j] else 1
+            bool_data = [sign_bit] + num_bits
+            for i in range(self.bit_length):
+                super().insert(insert_bit_start + i, bool_data[i])
+            self.total_bits += self.bit_length
+    def append(self,v):
+        v = int(v)
+        req_bits = 1 + abs(v).bit_length() if v != 0 else 1
+        if req_bits > self.bit_length:
+            old_data = list(self)
+            self.bit_length = req_bits
+            self.clear()
+            self.extend(old_data)
+        self.total_bits += self.bit_length
+        self[-1] = v
     def __iter__(self):
-        for i in range(0, self.total_bits, self.bit_length):
-            if i + self.bit_length > self.size:
-                break
-            bit_chunk = [super().__getitem__(j) for j in range(i, i + self.bit_length)]
-            yield self.to_int(bit_chunk)
-
+        return BHA_Iterator(map(self.__getitem__,range(len(self))))
+    def clear(self):
+        self.total_bits = 0
+        super().__init__(0, 0, False, IntBitTag, False)
+        self.bit_length = 8
     def __str__(self):
         return f"IntHybridArray([{', '.join(map(str, self))}])"
     __repr__ = __str__
-
+    def __delitem__(self, index: int = -1):
+        index = index if index >= 0 else index + len(self)
+        if not (0 <= index < len(self)):
+            raise IndexError("删除索引超出范围")
+        target_num = self[index]
+        pop_bit_start = index * self.bit_length
+        pop_bit_end = pop_bit_start + self.bit_length
+        for _ in range(self.bit_length):
+            super().__delitem__(pop_bit_start)
+        self.total_bits -= self.bit_length
     def __len__(self):
         return self.total_bits // self.bit_length
+    def index(self, value):
+        value = int(value)
+        x = f"{value} 不在 IntHybridArray 中"
+        for idx in range(len(self)+2>>2):
+            if self[idx] == value:
+                return idx
+            elif self[-idx] == value:
+                x = len(self)-idx
+        if x != f"{value} 不在 IntHybridArray 中":
+            return x
+        raise ValueError(x)
+    def rindex(self, value):
+        value = int(value)
+        x = f"{value} 不在 IntHybridArray 中"
+        for idx in range(len(self)+2>>2):
+            if self[-idx] == value:
+                return -idx
+            elif self[idx] == value:
+                x = -(len(self)-idx)
+        if x != f"{value} 不在 IntHybridArray 中":
+            return x
+        raise ValueError(x)
