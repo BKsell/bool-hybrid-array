@@ -4,8 +4,10 @@ setup.py
 bool_hybrid_array/__init__.py
 bool_hybrid_array/__main__.py
 bool_hybrid_array/core.py
+bool_hybrid_array/秘密.md
 bool_hybrid_array.egg-info/PKG-INFO
 bool_hybrid_array.egg-info/SOURCES.txt
 bool_hybrid_array.egg-info/dependency_links.txt
 bool_hybrid_array.egg-info/requires.txt
 bool_hybrid_array.egg-info/top_level.txt
+bool_hybrid_array/int_array/__init__.py

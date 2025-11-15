@@ -264,4 +264,21 @@ try:numba_opt()
 except:print("请先安装numba库！！！")
 
 
+#int_array模块（9.10.10新增）：
+
+max_num = (1 << 256) - 1
+min_num = -max_num
+
+# 1. IntHybridArray：257位完美存储
+arr_hybrid = int_array.IntHybridArray([max_num, min_num, 123456], bit_length=257)
+print("✅ IntHybridArray存储结果：")
+print(f"最大值：{arr_hybrid[0]}")
+print(f"最小值：{arr_hybrid[1]}")
+
+# 2. NumPy：用最大的int64尝试存储（必然失败）
+try:
+    arr_np = np.array([max_num, min_num, 123456], dtype=np.int64)
+    print("\n❌ NumPy存储结果：", arr_np)
+except OverflowError as e:
+    print(f"\n❌ NumPy存储失败：{e}")
 

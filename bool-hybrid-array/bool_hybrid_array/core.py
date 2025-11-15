@@ -272,7 +272,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                 raise IndexError(f"小索引 {key} 超出small数组范围（长度{len(self.small)}）")
             self.small = np.delete(self.small, key)
             self.small = np.append(self.small, not self.is_sparse)
-            self.split_index = min(self.split_index, len(self.small) - 1)
+            self.split_index -= min(self.split_index, len(self.small) - 1)
         else:
             pos = bisect.bisect_left(self.large, key)
             if pos < len(self.large) and self.large[pos] == key:
@@ -410,7 +410,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __copy__(self) -> BoolHybridArray:
         return self.copy()
     def find(self,value):
-        return BHA_List([i for i in range(len(self)) if self[i]==value])
+        from .int_array import IntHybridArray
+        return IntHybridArray([i for i in range(len(self)) if self[i]==value])
     def extend(self, iterable:Iterable) -> None:
         if isinstance(iterable, (Iterator, Generator, map)):
             iterable,copy = itertools.tee(iterable, 2)
@@ -518,7 +519,7 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
         split_index = int(min(size * 0.8, math.sqrt(size) * 100))
         split_index = math.isqrt(size) if true_count>size/3*2 or true_count<size/3 else max(split_index, 1)
         split_index = int(split_index) if split_index < 150e+7*2 else int(145e+7*2)
-        arr = BoolHybridArray(split_index, size, is_sparse, Type, hash_ = F)
+        arr = BoolHybridArray(split_index = split_index, size = size, is_sparse = is_sparse, Type = Type, hash_ = F)
         small_max_idx = min(split_index, size - 1)
         if a:
             small_data = []

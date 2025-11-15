@@ -2,14 +2,15 @@ import sys
 from types import ModuleType
 from . import core
 from .core import __builtins__,builtins
-__version__ = "9.10.9"
+from . import int_array
+__version__ = "9.10.12"
 public_objects = []
 for name in dir(core):
     if not name.startswith("_"):
         obj = getattr(core, name)
         if isinstance(obj, (type, ModuleType)) or callable(obj):
             public_objects.append(name)
-__all__ = public_objects + ["__version__","__builtins__","core","builtins","__dict__"]
+__all__ = public_objects + ["__version__","__builtins__","core","builtins","__dict__","int_array"]
 globals().update({
     name: getattr(core, name)
     for name in public_objects
