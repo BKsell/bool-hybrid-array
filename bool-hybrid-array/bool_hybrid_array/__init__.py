@@ -3,7 +3,7 @@ from types import ModuleType
 from . import core
 from .core import __builtins__,builtins
 from . import int_array
-__version__ = "9.10.13"
+__version__ = "9.10.15"
 public_objects = []
 for name in dir(core):
     if not name.startswith("_"):
@@ -17,6 +17,7 @@ globals().update({
 })
 try:
     __dict__ = ProtectedBuiltinsDict(globals())
+    sys.modules[__name__+'.int_array'] = ProtectedBuiltinsDict(int_array.__dict__)
     sys.modules[__name__] = ProtectedBuiltinsDict(globals().copy())
     sys.modules[__name__].name = 'bool_hybrid_array'
     core.__dict__ = ProtectedBuiltinsDict(core.__dict__)
