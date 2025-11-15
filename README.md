@@ -353,6 +353,24 @@ BoolHybridArr([False,False,False,False,True,True,False,True,True,False]),
 try:numba_opt()
 except:print("请先安装numba库！！！")
 
+#int_array模块（9.10.10新增）：
+
+max_num = (1 << 256) - 1
+min_num = -max_num
+
+# 1. IntHybridArray：257位完美存储
+arr_hybrid = int_array.IntHybridArray([max_num, min_num, 123456], bit_length=257)
+print("✅ IntHybridArray存储结果：")
+print(f"最大值：{arr_hybrid[0]}")
+print(f"最小值：{arr_hybrid[1]}")
+
+# 2. NumPy：用最大的int64尝试存储（必然失败）
+try:
+    arr_np = np.array([max_num, min_num, 123456], dtype=np.int64)
+    print("\n❌ NumPy存储结果：", arr_np)
+except OverflowError as e:
+    print(f"\n❌ NumPy存储失败：{e}")
+
 ```
 
 ## 性能优势
@@ -497,7 +515,10 @@ except:print("请先安装numba库！！！")
 * **9.10.7**：修复了RecursionError: maximum recursion depth exceeded错误
 * **9.10.8**：给Create_BHA新增了mmap优化
 * **9.10.9**：修复9.10.8版本中的NameError错误
-
+* **9.10.10**：新增int_array模块
+* **9.10.11**：修复NameError: name 'int_array' is not defined. Did you mean: 'bytearray'?的错误
+* **9.10.12**：把find方法的返回值改为IntHybridArray
+* **9.10.13**：给IntHybridArray新增多种列表操作
 
 
 
