@@ -756,6 +756,15 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
             raise AttributeError(f'禁止修改内置常量：{self.name}.{name}')
         else:
             super().__setattr__(name,value)
+    def __import__(self, name, globals=None, locals=None, fromlist=(), level=0):
+        if fromlist:
+            result = []
+            for key in fromlist:
+                if key not in self:
+                    raise AttributeError(f"'ImportableDict' object has no attribute '{key}'")
+                result.append(self[key])
+            return result[0] if len(result) == 1 else tuple(result)
+        return self
 def Ask_arr(arr):
     if isinstance(arr,BHA_List):
         return '\n'.join(map(Ask_arr,arr))

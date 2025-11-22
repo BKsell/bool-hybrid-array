@@ -522,6 +522,7 @@ except OverflowError as e:
 * **9.10.14**：修复IntHybridArray中因单个 0 导致所有数字位长被压缩到 1的问题
 * **9.10.15**：修复IntHybridArray变成布尔数组的错误
 * **9.10.16**：新增Python 3.14时的jit优化加速
+* **9.10.17**：给保护字典添加__import__方法，支持from导入
 
 
 
