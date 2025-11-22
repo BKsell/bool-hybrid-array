@@ -495,12 +495,14 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def get_shape(self):
         return (self.size,)
     def __array__(self,dtype = np.bool_,copy = None):
-        arr = np.fromiter(map(np.bool_,self), dtype=np.bool_)
+        arr = np.fromiter(map(np.bool_,self), dtype=dtype)
         return arr.copy() if copy else arr.view()
     def view(self):
         arr = TruesArray(0)
         arr.__dict__ = self.__dict__
         return arr
+    def __reduce__(self):
+        return BoolHybridArr,(np.asarray(self),self.is_sparse,self.Type,self.hash_,),
 class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     def __new__(cls, lst: Iterable, is_sparse=None, Type = None, hash_ = True) -> BoolHybridArray:
@@ -608,12 +610,6 @@ class BHA_bool(int,metaclass=ResurrectMeta):
         return hash(self.data)
     def __len__(self):
         raise TypeError("'BHA_bool' object has no attribute '__len__'")
-    def __del__(self):
-        if not sys.is_finalizing():
-            print(f'你删除或修改了1个常变量：{repr(self)}！')
-            if self:builtins.T = BHA_bool(1)
-            else:builtins.F = BHA_bool(0)
-            raise TypeError(f'禁止删除或修改常变量{repr(self)}！')
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
 class BHA_Bool(BHA_bool,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
@@ -645,10 +641,10 @@ class BHA_List(list,metaclass=ResurrectMeta):
         return self.hash_value
     def __call__(self, func):
         func.self = self
-        def wrapper(self, *args, **kwargs):
+        def wrapper(*args, **kwargs):
             return func(self, *args, **kwargs)
         setattr(self, func.__name__, wrapper)
-        return wrapper
+        return func
     def __str__(self):
         def Temp(v):
             if isinstance(v,(BoolHybridArray,np.ndarray,BHA_List,array.array)):

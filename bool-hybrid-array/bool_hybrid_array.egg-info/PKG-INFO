@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: bool-hybrid-array
-Version: 9.10.17
+Version: 9.10.19
 Summary: 一个高效的布尔数组（密集+稀疏混合存储，节省内存）
 Home-page: https://github.com/BKsell/bool-hybrid-array
 Author: 蔡靖杰
@@ -424,7 +424,7 @@ except OverflowError as e:
 
 ## 版本历史
 
-* **7.8.13**：PyPI上的初始版本，支持基本功能和自动存储优化
+- --7.8.13--：PyPI上的初始版本，支持基本功能和自动存储优化
 * **7.9.0**：添加TruesArray和FalsesArray
 * **7.9.1**：修复介绍的bug，增加copy功能
 * **7.9.2**：新增find()方法
@@ -466,7 +466,7 @@ except OverflowError as e:
 * **7.14.4**：修复in的错误×3
 * **7.14.5**：修复in的错误×4
 * **7.14.6**：优化arr.large的类型
-* **8.0.0**：兼容numpy数组
+- --8.0.0--：兼容numpy数组
 * **8.0.1**：修复8.0.0兼容numpy数组时没有形状参数的问题
 * **8.0.2**：移除bool_hybrid_dtype，改用object
 * **8.1.0**：利用ctypes加速密集部分的一些方法
@@ -478,7 +478,7 @@ except OverflowError as e:
 * **8.2.0**：支持哈希
 * **8.2.1**：修复8.2.0版本中的NameError
 * **8.2.2**：修复8.2.1版本中的IndexError
-* **9.0.0**：详情见上
+- --9.0.0--：详情见上
 * **9.0.1**：小更新，优化optimize方法
 * **9.1.0**：新增二维数组的optimize与memory\_usage，优化二维数组的位运算，给BHA\_Bool新增__rand__、**ror**、__rxor__等等
 * **9.1.1**：修复9.1.0版本中的TypeError: unsupported operand type(s) for +: 'int' and 'method'错误
@@ -563,6 +563,12 @@ except OverflowError as e:
 * **9.10.15**：修复IntHybridArray变成布尔数组的错误
 * **9.10.16**：新增Python 3.14时的jit优化加速
 * **9.10.17**：给保护字典添加__import__方法，支持from导入
+* **9.10.18**：新增BoolHybridArray的序列化和反序列化支持
+* **9.10.18.post1**：修复TypeError: cannot pickle 'itertools._tee' object错误
+* **9.10.18.post2**：尝试修复“满屏错误”的问题
+* **9.10.18.post3**：尝试修复“满屏错误”的问题×2
+* **9.10.18.post4**：尝试修复“满屏错误”的问题×3
+* **9.10.19**：和9.10.18.post4相同，正式版本发布
 
 
 

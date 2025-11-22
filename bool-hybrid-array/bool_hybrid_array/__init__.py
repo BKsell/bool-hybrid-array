@@ -3,7 +3,7 @@ from types import ModuleType,FunctionType
 from . import core
 from .core import __builtins__,builtins
 from . import int_array
-__version__ = "9.10.17"
+__version__ = "9.10.19"
 public_objects = []
 def jit_class_methods(cls):
     for attr_name in dir(cls):
