@@ -2,11 +2,11 @@ from __future__ import annotations
 from ..core import *
 import builtins
 
-class IntBitTag(BHA_Bool, metaclass=ResurrectMeta):
+class IntBitTag(BHA_bool, metaclass=ResurrectMeta):
     def __str__(self):
         return "'-1'" if (hasattr(self, 'is_sign_bit') and self.is_sign_bit and self) else "'1'" if self else "'0'"
     __repr__ = __str__
-
+    __del__ = lambda self:self
 class IntHybridArray(BoolHybridArray):
     def __init__(self, int_array: list[int], bit_length: int = 8):
         self.bit_length = bit_length
