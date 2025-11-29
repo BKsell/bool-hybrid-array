@@ -531,6 +531,7 @@ except OverflowError as e:
 * **9.10.19**：和9.10.18.post4相同，正式版本发布
 * **9.10.20**：优化性能，增加BHA_jit_log日志
 * **9.10.21**：优化Ask_BHA，移除BHA_jit_log日志
+* **9.10.22**：进一步优化Ask_BHA的性能
 
 
 ## **彩蛋：**

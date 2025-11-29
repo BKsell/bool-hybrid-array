@@ -2,8 +2,9 @@ import sys
 from types import ModuleType,FunctionType
 from . import core
 from .core import __builtins__,builtins
-from . import int_array
-__version__ = "9.10.21"
+try:from . import int_array
+except:pass
+__version__ = "9.10.22"
 public_objects = []
 for name in dir(core):
     if not name.startswith("_"):

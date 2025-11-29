@@ -8,6 +8,14 @@ import operator,ctypes,gc,abc,types
 from functools import lru_cache
 from typing import Union,_GenericAlias
 hybrid_array_cache = []
+try:
+    msvcrt = ctypes.CDLL('msvcrt.dll')
+    memcpy = msvcrt.memcpy
+except:
+    libc = ctypes.CDLL('libc.so.6')
+    memcpy = libc.memcpy
+memcpy.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t)
+memcpy.restype = ctypes.c_void_p
 if 'UnionType' in types.__dict__:
     class Union:
         def __getitem__(self,*args):
@@ -786,18 +794,14 @@ def Ask_BHA(path):
             temp = mm.read().decode('utf-8').strip()
         temp = temp.split()
         temp2 = lambda x: BoolHybridArr(
-        reduce(
-        lambda acc, k: acc.append(0 if k < lead_zero else
-        (n >> ((total_len - 1) - k)) & 1
-        ) or acc,
-        range(total_len),
-        array.array('B',[])),
-        hash_=F
-        )if(
-            n := int(x, base=16),
-            lead_zero := len(x) - len(x.lstrip('0')),
-            total_len := lead_zero + (n.bit_length() if n != 0 else 1)
-        )else None
+        (
+        bit_stream := bytes(0 if k < lead_zero else (n >> ((total_len - 1) - k)) & 1 for k in range(total_len)),
+        arr := array.array('B', FalsesArray(total_len)),
+        memcpy(arr.buffer_info()[0], bit_stream, total_len),arr)[-1]
+        if(n := int(x, base=16),
+        lead_zero := len(x) - len(x.lstrip('0')),
+        total_len := lead_zero + (n.bit_length() if n else 1))
+        else array.array('B'))
         temp = BHA_List(map(temp2,temp))
         if len(temp) == 1:
             return temp[0]
