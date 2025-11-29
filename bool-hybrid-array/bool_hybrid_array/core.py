@@ -333,7 +333,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             return False
         return all(a == b for a, b in zip(self, other))
     def __ne__(self, other) -> bool:
-        return not self.__eq__(other)
+        return not self == other
     def __and__(self, other) -> BoolHybridArray:
         if type(other) == int:
             other = abs(other)
@@ -785,7 +785,19 @@ def Ask_BHA(path):
         with mm:
             temp = mm.read().decode('utf-8').strip()
         temp = temp.split()
-        temp2 = lambda x:BoolHybridArr(map(int,'0'*(len(x) - len(x.lstrip('0')))+bin(int(x,base = 16))[2:]),hash_ = F)
+        temp2 = lambda x: BoolHybridArr(
+        reduce(
+        lambda acc, k: acc.append(0 if k < lead_zero else
+        (n >> ((total_len - 1) - k)) & 1
+        ) or acc,
+        range(total_len),
+        array.array('B',[])),
+        hash_=F
+        )if(
+            n := int(x, base=16),
+            lead_zero := len(x) - len(x.lstrip('0')),
+            total_len := lead_zero + (n.bit_length() if n != 0 else 1)
+        )else None
         temp = BHA_List(map(temp2,temp))
         if len(temp) == 1:
             return temp[0]
