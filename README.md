@@ -532,6 +532,11 @@ except OverflowError as e:
 * **9.10.20**：优化性能，增加BHA_jit_log日志
 * **9.10.21**：优化Ask_BHA，移除BHA_jit_log日志
 * **9.10.22**：进一步优化Ask_BHA的性能
+* **9.11.0**：新增对7.3.10以上的版本的PyPy解释器的支持
+
+
+
+
 
 
 ## **彩蛋：**
@@ -546,7 +551,11 @@ except OverflowError as e:
 * A：BoolHybridArray是本库中的**核心类**，所有函数都是围绕他进行的，但需要`split_index`,`size`,`is_sparse`；
   BoolHybridArr是一个**函数**，用于把一个可迭代对象转为`BoolHybridArray`类
 * Q：为什么不建议把太大的本类型数组打印？
-* A：虽然本类型数组省内存，但字符串不省内存，一个`True`要4字节，一个`False`要5字节，连逗号都要占1字节（`numpy.ndarray`：我都比字符串省内存）
+* A：虽然BoolHybridArray类型数组省内存，但字符串不省内存，一个`True`要4字节，一个`False`要5字节，连逗号都要占1字节（`numpy.ndarray`：我都比字符串省内存）
+- Q：为什么使用在Windows终端使用PyPy时建议先调用`chcp 65001`再启动PyPy？
+* A：因为本库有很多的的中文报错和打印，项目里也可能会有。Windows终端里的PyPy默认是GBK编码，有中文时会乱码。chcp 65001可以切换到UTF-8编码，防止乱码。
+
+
 
 ## 源代码和原理
 

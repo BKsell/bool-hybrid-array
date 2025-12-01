@@ -1,7 +1,7 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 from ..core import *
 import builtins
-
 class IntBitTag(BHA_bool, metaclass=ResurrectMeta):
     def __str__(self):
         return "'-1'" if (hasattr(self, 'is_sign_bit') and self.is_sign_bit and self) else "'1'" if self else "'0'"
@@ -80,7 +80,7 @@ class IntHybridArray(BoolHybridArray):
                 block_end = block_start + self.bit_length
                 if block_end > self.size:
                     raise IndexError("索引超出范围")
-                bit_chunk = [super().__getitem__(j) for j in range(block_start, block_end)]
+                bit_chunk = [super(self.__class__, self).__getitem__(j) for j in range(block_start, block_end)]
                 num = self.to_int(bit_chunk)
                 result.append(num)
             return IntHybridArray(result, self.bit_length)
@@ -91,7 +91,7 @@ class IntHybridArray(BoolHybridArray):
         block_end = block_start + self.bit_length
         if block_end > self.size:
             raise IndexError("索引超出范围")
-        bit_chunk = [super().__getitem__(j) for j in range(block_start, block_end)]
+        bit_chunk = [super(self.__class__, self).__getitem__(j) for j in range(block_start, block_end)]
         return self.to_int(bit_chunk)
 
     def __setitem__(self, key, value):
@@ -145,14 +145,10 @@ class IntHybridArray(BoolHybridArray):
                     carry = 0 if num_bits[j] else 1
         bool_data = [sign_bit] + num_bits
         for bit_idx in range(self.bit_length):
-            super().__setitem__(block_start + bit_idx, bool_data[bit_idx])
+            super(self.__class__, self).__setitem__(block_start + bit_idx, bool_data[bit_idx])
 
     def __iter__(self):
-        for i in range(0, self.total_bits, self.bit_length):
-            if i + self.bit_length > self.size:
-                break
-            bit_chunk = [super().__getitem__(j) for j in range(i, i + self.bit_length)]
-            yield self.to_int(bit_chunk)
+        return map(self.__getitem__,range(len(self)))
 
     def __str__(self):
         return f"IntHybridArray([{', '.join(map(str, self))}])"
@@ -173,7 +169,7 @@ class IntHybridArray(BoolHybridArray):
     def index(self, value):
         value = int(value)
         x = f"{value} 不在 IntHybridArray 中"
-        for idx in range(len(self)+2>>2):
+        for idx in range(len(self)+1>>1):
             if self[idx] == value:
                 return idx
             elif self[-idx] == value:
@@ -184,7 +180,7 @@ class IntHybridArray(BoolHybridArray):
     def rindex(self, value):
         value = int(value)
         x = f"{value} 不在 IntHybridArray 中"
-        for idx in range(len(self)+2>>2):
+        for idx in range(len(self)+1>>1):
             if self[-idx] == value:
                 return -idx
             elif self[idx] == value:
@@ -201,3 +197,4 @@ class IntHybridArray(BoolHybridArray):
         self.total_bits += len_*self.bit_length
         for i,j in zip(range(len_),iterable):
             self[-i-1] = j
+__all__ = list(globals())

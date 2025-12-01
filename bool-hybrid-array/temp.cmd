@@ -1,3 +1,4 @@
+chcp 65001
 python -OO temp.py
 python -O temp.py
 python temp.py
@@ -6,9 +7,9 @@ python -O -m bool_hybrid_array.__init__
 python -OO -m bool_hybrid_array.__init__
 
 
-
-
+pypy -OO -m bool_hybrid_array.__init__
 
 python -OO -m bool_hybrid_array
-python -OO -m ≤‚ ‘¥˙¬Î.py
+pypy -OO -m bool_hybrid_array
+pypy test_pypy.py
 pause

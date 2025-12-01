@@ -1,5 +1,6 @@
 from __future__ import annotations
 import builtins
+from types import MappingProxyType
 import array,bisect,numpy as np
 from collections.abc import MutableSequence,Iterable,Generator,Iterator,Sequence
 import itertools,copy,sys,math,weakref,random,mmap,os
@@ -37,12 +38,23 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
         super_cls.__setattr__('bases', bases)
         super_cls.__setattr__('namespace', namespace)
         super_cls.__setattr__('original_dict', dict(obj.__dict__))
-        del obj.original_dict["__abstractmethods__"]
-        del obj.original_dict["_abc_impl"]
+        try:del obj.original_dict["__abstractmethods__"]
+        except:pass
+        try:del obj.original_dict["_abc_impl"]
+        except:pass
+        try:del obj.original_dict['_abc_registry']
+        except:pass
+        try:del obj.original_dict['_abc_cache']
+        except:pass
+        try:del obj.original_dict['_abc_negative_cache']
+        except:pass
+        try:del obj.original_dict['_abc_negative_cache_version']
+        except:pass
+        super_cls.__setattr__('original_dict', MappingProxyType(obj.original_dict))
         return obj
     @lru_cache
     def __str__(cls):
-        return super().__repr__()[8:][:-2]
+        return f'{cls.__module__}.{cls.name}'
     @lru_cache
     def __repr__(cls,detailed = False):
         if detailed:
@@ -87,6 +99,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
         original_dict["__or__"] = __or__
     except:
         pass
+    original_dict = MappingProxyType(original_dict)
 ResurrectMeta.__class__ = ResurrectMeta
 class BHA_Function(metaclass=ResurrectMeta):
     def __init__(self,v):
@@ -711,11 +724,11 @@ class BHA_Iterator(Iterator,metaclass=ResurrectMeta):
         return arr.copy() if copy else arr.view()
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
-    def __init__(self, *args, protected_names = ["T", "F", "BHA_Bool", "BHA_List", "BoolHybridArray", "BoolHybridArr",
+    def __init__(self, *args, protected_names = ("T", "F", "BHA_Bool", "BHA_List", "BoolHybridArray", "BoolHybridArr",
                                 "TruesArray", "FalsesArray", "ProtectedBuiltinsDict", "builtins",
                                 "__builtins__", "__dict__","ResurrectMeta","math",
                                 "np","protected_names","BHA_Function",
-                                "__class__","Ask_BHA","Create_BHA","Ask_arr","numba_opt"],
+                                "__class__","Ask_BHA","Create_BHA","Ask_arr","numba_opt"),
                  name = 'builtins', **kwargs):
         super().__init__(*args, **kwargs)
         if name == 'builtins':
@@ -723,20 +736,23 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
             super().__setattr__('builtins',self)
             super().__setattr__('__builtins__',self)
         self.name = name
-        self.protected_names = protected_names
+        super().__setattr__("protected_names",protected_names)
     def __setitem__(self, name, value):
-        if name in ["T", "F"]:
-            current_T = self.get("T")
-            current_F = self.get("F")
-            if isinstance(current_T, BHA_bool) and isinstance(current_F, BHA_bool):
-                is_swap = (name == "T" and isinstance(value, BHA_bool) and value.value == current_F.value)or(name == "F" and isinstance(value, BHA_bool) and value.value == current_T.value)
-                if is_swap:
-                    print(f"""警告：禁止交换内置常量 __{self.name}__["{name}"] 和 __builtins__["{'F' if name == 'T' else 'T'}"]！""")
-                    raise AttributeError(f"""禁止交换内置常量 __{self.name}__["{name}"] 和 __{self.name}__["{'F' if name == 'T' else 'T'}"]""")
-        if name in self.protected_names and name not in ["T", "F"]:
-            print(f"警告：禁止修改内置常量 __{self.name}__['{name}']！")
-            raise AttributeError(f"禁止修改内置常量 __{self.name}__['{name}']")
-        super().__setitem__(name, value)
+        if not hasattr(self,"protected_names"):super().__setitem__(name, value)
+        try:
+            if name in ["T", "F"]:
+                current_T = self.get("T")
+                current_F = self.get("F")
+                if isinstance(current_T, BHA_bool) and isinstance(current_F, BHA_bool):
+                    is_swap = (name == "T" and isinstance(value, BHA_bool) and value.value == current_F.value)or(name == "F" and isinstance(value, BHA_bool) and value.value == current_T.value)
+                    if is_swap:
+                        print(f"""警告：禁止交换内置常量 __{self.name}__["{name}"] 和 __builtins__["{'F' if name == 'T' else 'T'}"]！""")
+                        raise AttributeError(f"""禁止交换内置常量 __{self.name}__["{name}"] 和 __{self.name}__["{'F' if name == 'T' else 'T'}"]""")
+            if name in self.protected_names and name not in ["T", "F"]:
+                print(f"警告：禁止修改内置常量 __{self.name}__['{name}']！")
+                raise AttributeError(f"禁止修改内置常量 __{self.name}__['{name}']")
+        except:pass
+        finally:super().__setitem__(name, value)
     def __delitem__(self, name):
         if name in self.protected_names:
             print(f"警告：禁止删除内置常量 __builtins__['{name}']！")
@@ -749,10 +765,12 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
         else:
             del self[name]
     def __getattr__(self, name):
-        if name in self:
-            return self[name]
-        else:
-            raise AttributeError(f"module 'builtins' has no attribute '{name}'")
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            if name in self:
+                return self[name]
+            raise AttributeError(f"module 'builtins' has no attribute '{name}'") from None
     def __setattr__(self,name,value):
         try:protected = self.protected_names
         except Exception:protected = self

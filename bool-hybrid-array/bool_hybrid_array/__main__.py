@@ -1,4 +1,8 @@
+# -*- coding: utf-8 -*-
 from .__init__ import *
+import io
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='ignore')
 
 # 创建实例
 

@@ -1,10 +1,11 @@
+# -*- coding: utf-8 -*-
 import sys
 from types import ModuleType,FunctionType
 from . import core
 from .core import __builtins__,builtins
 try:from . import int_array
 except:pass
-__version__ = "9.10.22"
+__version__ = "9.11.0"
 public_objects = []
 for name in dir(core):
     if not name.startswith("_"):
@@ -17,11 +18,11 @@ globals().update({
     for name in public_objects
 })
 try:
-    __dict__ = ProtectedBuiltinsDict(globals())
-    sys.modules[__name__+'.int_array'] = ProtectedBuiltinsDict(int_array.__dict__)
-    sys.modules[__name__+'.core'] = ProtectedBuiltinsDict(core.__dict__)
     sys.modules[__name__] = ProtectedBuiltinsDict(globals())
-    sys.modules[__name__].name = 'bool_hybrid_array'
+    sys.modules[__name__].name = __name__
+    sys.modules[__name__+'.core'] = ProtectedBuiltinsDict(core.__dict__,name = f'{__name__}.core')
+    __dict__ = ProtectedBuiltinsDict(globals())
+    sys.modules[__name__+'.int_array'] = ProtectedBuiltinsDict(int_array.__dict__,name = __name__+'.int_array')
     core.__dict__ = ProtectedBuiltinsDict(core.__dict__)
 except:
     pass

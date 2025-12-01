@@ -8,7 +8,7 @@ def get_long_description():
     return "一个高效的布尔数组（密集+稀疏混合存储，节省内存）"
 setup(
     name="bool-hybrid-array",
-    version="9.10.22",
+    version="9.11.0",
     author="蔡靖杰",
     extras_require={"int_array":[]},
     author_email="1289270215@qq.com",
@@ -27,11 +27,14 @@ setup(
         'Programming Language :: Python :: 3.12',
         'Programming Language :: Python :: 3.13',
         'Programming Language :: Python :: 3.14',
+        "Programming Language :: Python :: 3 :: Only",
+        'Programming Language :: Python :: Implementation :: CPython',
+        'Programming Language :: Python :: Implementation :: PyPy', 
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
     keywords="boolean array, compact storage",
-    package_data={"": ["README.md", "LICENSE",'temp.py', 'temp.cmd','BHA_Opener.zip'],"bool_hybrid_array":["*"]},
+    package_data={"": ["README.md", "LICENSE",'temp.py', 'temp.cmd','BHA_Opener.zip'],"bool_hybrid_array":["*"],"bool_hybrid_array/__pycache__":['*.pyc']},
     include_package_data=True,
     url="https://github.com/BKsell/bool-hybrid-array",
     project_urls={
