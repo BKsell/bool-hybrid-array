@@ -1,5 +1,10 @@
 # BoolHybridArray：高效的布尔混合数组库
 
+<!-- 月下载量（核心推荐）+ 周下载量 + 总下载量 -->
+[![月下载量](https://static.pepy.tech/badge/bool-hybrid-array/month)](https://pepy.tech/project/bool-hybrid-array)
+[![周下载量](https://static.pepy.tech/badge/bool-hybrid-array/week)](https://pepy.tech/project/bool-hybrid-array)
+[![总下载量](https://static.pepy.tech/badge/bool-hybrid-array)](https://pepy.tech/project/bool-hybrid-array)
+
 一个专为布尔值优化的数组类，能够根据数据特征自动在密集存储和稀疏存储模式间切换，兼顾性能和内存效率。
 
 ## ***注：大版本号更新并非不兼容更新，而是重大更新***
@@ -532,7 +537,7 @@ except OverflowError as e:
 * **9.10.20**：优化性能，增加BHA_jit_log日志
 * **9.10.21**：优化Ask_BHA，移除BHA_jit_log日志
 * **9.10.22**：进一步优化Ask_BHA的性能
-* **9.11.0**：新增对7.3.10以上的版本的PyPy解释器的支持
+* **9.11.0**：新增对7.3.10以上版本的PyPy解释器的支持
 
 
 
