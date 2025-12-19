@@ -241,7 +241,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                     if pos < len(self.large):
                         del self.large[pos]
                 return None
-    def __getitem__(self, key:int|slice) -> BoolHybridArray:
+    def __getitem__(self, key:int|slice = -1) -> BoolHybridArray:
         if isinstance(key, slice):
             start, stop, step = key.indices(self.size)
             return BoolHybridArr((self[i] for i in range(start, stop, step)),hash_ = self.hash_)
@@ -284,7 +284,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __repr__(self) -> str:
         return(f"BoolHybridArray(split_index={self.split_index}, size={self.size}, "
         +f"is_sparse={self.is_sparse}, small_len={len(self.small)}, large_len={len(self.large)})")
-    def __delitem__(self, key: int) -> None:
+    def __delitem__(self, key: int = -1) -> None:
         key = key if key >= 0 else key + self.size
         if not (0 <= key < self.size):
             raise IndexError(f"索引 {key} 超出范围 [0, {self.size})")
@@ -445,6 +445,12 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def append(self,v):
         self.size += 1
         self[-1] = v
+    push = append
+    peek = __getitem__
+    top = property(peek)
+    front = property(lambda self:self[0])
+    rear = top
+    enqueue = push
     def index(self, value) -> int:
         if self.size == 0:
             raise ValueError('无法在空的 BoolHybridArray 中查找元素！')
@@ -524,6 +530,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         return arr
     def __reduce__(self):
         return BoolHybridArr,(np.asarray(self),self.is_sparse,self.Type,self.hash_,),
+    dequeue = lambda self:self.pop(0)
 class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     def __new__(cls, lst: Iterable, is_sparse=None, Type = None, hash_ = True) -> BoolHybridArray:
@@ -702,6 +709,9 @@ class BHA_List(list,metaclass=ResurrectMeta):
             "对比numpy节省": f"{(1 - total / (temp + 96)) * 100:.6f}%"}
     def __iter__(self):
         return BHA_Iterator(super().__iter__())
+    def to_ascii_art(self, width=20):
+        art = '\n'.join([' '.join(['■' if j else ' '  for j in i]) for i in self])
+        return art
 class BHA_Iterator(Iterator,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     def __init__(self,data):
@@ -738,7 +748,9 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
         self.name = name
         super().__setattr__("protected_names",protected_names)
     def __setitem__(self, name, value):
-        if not hasattr(self,"protected_names"):super().__setitem__(name, value)
+        if not hasattr(self,"protected_names"):
+            super().__setitem__(name, value)
+            return
         try:
             if name in ["T", "F"]:
                 current_T = self.get("T")
@@ -751,7 +763,9 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
             if name in self.protected_names and name not in ["T", "F"]:
                 print(f"警告：禁止修改内置常量 __{self.name}__['{name}']！")
                 raise AttributeError(f"禁止修改内置常量 __{self.name}__['{name}']")
-        except:pass
+        except:
+            if sys.implementation.name == 'cpython':
+                raise
         finally:super().__setitem__(name, value)
     def __delitem__(self, name):
         if name in self.protected_names:

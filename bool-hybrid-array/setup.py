@@ -1,16 +1,20 @@
 from setuptools import setup, find_packages
-import os
+import os,sys
 def get_long_description():
     readme_path = os.path.join(os.path.dirname(__file__), 'README.md')
     if os.path.exists(readme_path):
         with open(readme_path, encoding='utf-8') as f:
             return f.read()
     return "一个高效的布尔数组（密集+稀疏混合存储，节省内存）"
+if sys.implementation.name == "pypy":
+            if not hasattr(sys, "pypy_version_info") or sys.pypy_version_info[:3] < (7, 3, 10):
+                pypy_ver = ".".join(map(str, sys.pypy_version_info)) if hasattr(sys, "pypy_version_info") else "未知"
+                sys.exit(f"❌ 错误：bool-hybrid-array 要求 PyPy≥7.3.10，当前版本 {pypy_ver}")
 setup(
     name="bool-hybrid-array",
-    version="9.11.0",
+    version="9.11.4",
     author="蔡靖杰",
-    extras_require={"int_array":[]},
+    extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],},
     author_email="1289270215@qq.com",
     description="一个高效的布尔数组（密集+稀疏混合存储，节省内存）",
     long_description=get_long_description(),

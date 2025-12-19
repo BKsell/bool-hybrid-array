@@ -1,8 +1,15 @@
 # BoolHybridArray：高效的布尔混合数组库
 
+<!-- 月下载量（核心推荐）+ 周下载量 + 总下载量 -->
+[![月下载量](https://static.pepy.tech/badge/bool-hybrid-array/month)](https://pepy.tech/project/bool-hybrid-array)
+[![周下载量](https://static.pepy.tech/badge/bool-hybrid-array/week)](https://pepy.tech/project/bool-hybrid-array)
+[![总下载量](https://static.pepy.tech/badge/bool-hybrid-array)](https://pepy.tech/project/bool-hybrid-array)
+
 一个专为布尔值优化的数组类，能够根据数据特征自动在密集存储和稀疏存储模式间切换，兼顾性能和内存效率。
 
 ## ***注：大版本号更新并非不兼容更新，而是重大更新***
+
+注：当API完全稳定时就会发布版本规则较严谨的new-1.0.0版本，预期为10.x版本结束后
 
 ***注意：目前社区中若存在名称类似（如包含 “bool-hybrid-array”+ 后缀、boolean\_array、validate.io-boolean-array）的库，均与本项目（bool-hybrid-array）无关联，本项目的所有功能设计、代码实现均为独立开发；***
 ***其他平台里的类似名库绝不是我的库***
@@ -101,7 +108,7 @@ big_arr = BoolHybridArr([i % 100 == 0 for i in range(10000)])
 
 # 查看存储模式（此时应为稀疏模式）
 
-print(repr(big_arr))  # 输出: BoolHybridArray(split_index=100,size=10000,is_sparse=True,small_len=100,large_len=)不好意思large_len我不知道
+print(repr(big_arr))  # 输出: BoolHybridArray(split_index=100, size=10000, is_sparse=True, small_len=101, large_len=98)
 
 # 自动优化存储
 
@@ -532,7 +539,11 @@ except OverflowError as e:
 * **9.10.20**：优化性能，增加BHA_jit_log日志
 * **9.10.21**：优化Ask_BHA，移除BHA_jit_log日志
 * **9.10.22**：进一步优化Ask_BHA的性能
-* **9.11.0**：新增对7.3.10以上的版本的PyPy解释器的支持
+* **9.11.0**：新增对7.3.10以上版本的PyPy解释器的支持
+* **9.11.1**：修复PyPy解释器下的保护机制过度保护bug
+* **9.11.2**：尝试修复IntHybridArray索引修改的错误
+* **9.11.3**：修复NameError: name 'lst' is not defined. Did you mean: 'list'?错误
+* **9.11.4**：修复TypeError: __dict__ must be set to a dictionary, not a 'IntHybridArray'的错误
 
 
 

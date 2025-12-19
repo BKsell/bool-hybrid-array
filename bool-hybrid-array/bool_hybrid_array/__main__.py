@@ -274,10 +274,12 @@ max_num = (1 << 256) - 1
 min_num = -max_num
 
 # 1. IntHybridArray：257位完美存储
-arr_hybrid = int_array.IntHybridArray([max_num, min_num, 123456], bit_length=257)
+arr_hybrid = int_array.IntHybridArray([max_num, min_num, 123456, 1], bit_length=257)
 print("✅ IntHybridArray存储结果：")
 print(f"最大值：{arr_hybrid[0]}")
 print(f"最小值：{arr_hybrid[1]}")
+print(f"整个数组：{arr_hybrid}")
+
 
 # 2. NumPy：用最大的int64尝试存储（必然失败）
 try:

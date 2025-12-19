@@ -95,58 +95,9 @@ class IntHybridArray(BoolHybridArray):
         return self.to_int(bit_chunk)
 
     def __setitem__(self, key, value):
-        value = int(value)
-        if isinstance(key, slice):
-            start, stop, step = key.indices(len(self))
-            values = list(value) if isinstance(value, (list, tuple, IntHybridArray)) else [value] * ((stop - start + step - 1) // step)
-            idx = 0
-            for int_idx in range(start, stop, step):
-                block_start = int_idx * self.bit_length
-                block_end = block_start + self.bit_length
-                if block_end > self.size:
-                    raise IndexError("索引超出范围")
-                num = values[idx % len(values)]
-                if num >= 0:
-                    sign_bit = False
-                    num_bits = [bool((num >> i) & 1) for i in range(self.bit_length - 1)]
-                else:
-                    sign_bit = True
-                    abs_num = abs(num)
-                    num_bits = [not bool((abs_num >> i) & 1) for i in range(self.bit_length - 1)]
-                    carry = 1
-                    for j in range(len(num_bits)):
-                        if carry:
-                            num_bits[j] = not num_bits[j]
-                            carry = 0 if num_bits[j] else 1
-                bool_data = [sign_bit] + num_bits
-                for bit_idx in range(self.bit_length):
-                    super().__setitem__(block_start + bit_idx, bool_data[bit_idx])
-                idx += 1
-            return
-        key = key if key >= 0 else key + len(self)
-        if not (0 <= key < len(self)):
-            raise IndexError("索引超出范围")
-        block_start = key * self.bit_length
-        block_end = block_start + self.bit_length
-        if block_end > self.size:
-            raise IndexError("索引超出范围")
-        num = value
-        if num >= 0:
-            sign_bit = False
-            num_bits = [bool((num >> i) & 1) for i in range(self.bit_length - 1)]
-        else:
-            sign_bit = True
-            abs_num = abs(num)
-            num_bits = [not bool((abs_num >> i) & 1) for i in range(self.bit_length - 1)]
-            carry = 1
-            for j in range(len(num_bits)):
-                if carry:
-                    num_bits[j] = not num_bits[j]
-                    carry = 0 if num_bits[j] else 1
-        bool_data = [sign_bit] + num_bits
-        for bit_idx in range(self.bit_length):
-            super(self.__class__, self).__setitem__(block_start + bit_idx, bool_data[bit_idx])
-
+        tmp = list(self)
+        tmp[key] = value
+        self.__dict__ = IntHybridArray(tmp).__dict__
     def __iter__(self):
         return map(self.__getitem__,range(len(self)))
 
@@ -197,4 +148,8 @@ class IntHybridArray(BoolHybridArray):
         self.total_bits += len_*self.bit_length
         for i,j in zip(range(len_),iterable):
             self[-i-1] = j
-__all__ = list(globals())
+    def append(self,value):
+        self.total_bits += self.bit_length
+        self.size = self.total_bits
+        self[-1] = value
+__all__ = tuple(globals())
