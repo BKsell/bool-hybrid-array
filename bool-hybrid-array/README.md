@@ -378,6 +378,27 @@ try:
 except OverflowError as e:
     print(f"\n❌ NumPy存储失败：{e}")
 
+#BHA_Queue（9.11.5版本新增）
+
+q = BHA_Queue([T, F, T, T, F])
+
+print(f"初始化队列: {q}")  # 输出：BHA_Queue([T,F,T,T,F])
+
+q.enqueue(T)
+
+q.enqueue(F)
+
+print(f"入队2个元素后: {q}")  # 输出：BHA_Queue([T,F,T,T,F,T,F])
+
+# 3. 出队（dequeue，均摊O(1)，仅首次触发转移）
+
+print(f"第一次出队: {q.dequeue()}")  # 输出：T（触发 self.a → self.b 转移，仅1次）
+
+print(f"第二次出队: {q.dequeue()}")  # 输出：F（直接从 self.b 弹出，纯O(1)）
+
+print(f"出队2个元素后: {q}")  # 输出：BHA_Queue([T,T,F,T,F])
+
+
 ```
 
 ## 性能优势
@@ -445,7 +466,7 @@ except OverflowError as e:
 * **8.2.0**：支持哈希
 * **8.2.1**：修复8.2.0版本中的NameError
 * **8.2.2**：修复8.2.1版本中的IndexError
-- --9.0.0--：详情见上
+- **9.0.0**：详情见上
 * **9.0.1**：小更新，优化optimize方法
 * **9.1.0**：新增二维数组的optimize与memory\_usage，优化二维数组的位运算，给BHA\_Bool新增__rand__、**ror**、__rxor__等等
 * **9.1.1**：修复9.1.0版本中的TypeError: unsupported operand type(s) for +: 'int' and 'method'错误
@@ -544,8 +565,10 @@ except OverflowError as e:
 * **9.11.2**：尝试修复IntHybridArray索引修改的错误
 * **9.11.3**：修复NameError: name 'lst' is not defined. Did you mean: 'list'?错误
 * **9.11.4**：修复TypeError: __dict__ must be set to a dictionary, not a 'IntHybridArray'的错误
-
-
+* **9.11.5**：新增BHA_Queue双栈实现队列
+* **9.11.6**：修复从9.11.3版本开始cpython用户无法安装bool-hybrid-array包的问题
+* **9.11.7**：修复TypeError: 'map' object is not reversible的错误
+* **9.11.8**：增加了Windows系统Python3.14的C扩展优化
 
 
 

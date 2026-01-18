@@ -1,4 +1,9 @@
+# cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False
 from __future__ import annotations
+try:from mypy_extensions import mypyc_attr
+except:
+    def mypyc_attr(*a,**k):
+        return lambda func:func
 import builtins
 from types import MappingProxyType
 import array,bisect,numpy as np
@@ -7,24 +12,24 @@ import itertools,copy,sys,math,weakref,random,mmap,os
 from functools import reduce
 import operator,ctypes,gc,abc,types
 from functools import lru_cache
-from typing import Union,_GenericAlias
-hybrid_array_cache = []
+from typing import _GenericAlias
+from typing import Callable, Union, Sequence, MutableSequence, Any, overload, Sized
+hybrid_array_cache:list[tuple[Any]] = []
 try:
     msvcrt = ctypes.CDLL('msvcrt.dll')
     memcpy = msvcrt.memcpy
 except:
-    libc = ctypes.CDLL('libc.so.6')
-    memcpy = libc.memcpy
+    try:
+        libc = ctypes.CDLL('libc.so.6')
+        memcpy = libc.memcpy
+    except:
+        libc = ctypes.CDLL('libc.so')
+        memcpy = libc.memcpy
 memcpy.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t)
 memcpy.restype = ctypes.c_void_p
-if 'UnionType' in types.__dict__:
-    class Union:
-        def __getitem__(self,*args):
-            return reduce(operator.or_, args)
-    Union = Union()
 if 'GenericAlias' in types.__dict__:
     _GenericAlias = types.GenericAlias
-class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
+class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     name = 'ResurrectMeta'
     def __new__(cls, name, bases, namespace):
@@ -37,7 +42,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
         super_cls.__setattr__('name', name)
         super_cls.__setattr__('bases', bases)
         super_cls.__setattr__('namespace', namespace)
-        super_cls.__setattr__('original_dict', dict(obj.__dict__))
+        super_cls.__setattr__('original_dict', dict(obj.__dict__))# type: ignore[assignment]
         try:del obj.original_dict["__abstractmethods__"]
         except:pass
         try:del obj.original_dict["_abc_impl"]
@@ -50,7 +55,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
         except:pass
         try:del obj.original_dict['_abc_negative_cache_version']
         except:pass
-        super_cls.__setattr__('original_dict', MappingProxyType(obj.original_dict))
+        super_cls.__setattr__('original_dict', MappingProxyType(obj.original_dict))# type: ignore[assignment]
         return obj
     @lru_cache
     def __str__(cls):
@@ -62,14 +67,16 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
             return f'ResurrectMeta(cls = {cls},{name = },{bases = },{namespace = })'
         return str(cls)
     def __del__(cls):
-        exec(f"builtins.{cls.__name__} = cls")
-        if not sys.is_finalizing():
-            print(f'警告：禁止删除常变量：{cls}！')
-            raise TypeError(f'禁止删除常变量：{cls}')
+        try:
+            setattr(builtins,cls.name,cls)
+            if not sys.is_finalizing():
+                print(f'警告：禁止删除常变量：{cls}！')
+                raise TypeError(f'禁止删除常变量：{cls}')
+        except NameError:pass
     def __hash__(cls):
         return hash(cls.name+cls.__module__)
     def __setattr__(cls,name,value):
-        if not hasattr(cls, 'x'):
+        if not hasattr(cls, 'x') or name.startswith('_'):
             super().__setattr__(name,value)
             return
         if hasattr(cls, 'name') and cls.name == 'BHA_Bool' and repr(value) in {'T','F'} and name in {'T','F'}:
@@ -101,7 +108,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
         pass
     original_dict = MappingProxyType(original_dict)
 ResurrectMeta.__class__ = ResurrectMeta
-class BHA_Function(metaclass=ResurrectMeta):
+class BHA_Function(metaclass=ResurrectMeta):# type: ignore
     def __init__(self,v):
         self.data,self.module = v,__name__
     def __call__(self,*a,**b):
@@ -121,14 +128,16 @@ def {name}({params}):
         exec(func_code, globals(), local_namespace)
         dynamic_func = local_namespace[name]
         return cls(dynamic_func)
-class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
+@mypyc_attr(native_class=False)
+class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
+    @mypyc_attr(native_class=False)
     class _CompactBoolArray(Sequence,Exception):
         def __init__(self, size: int):
             self.size = size
             self.n_uint8 = (size + 7) >> 3
-            self.data = np.zeros(self.n_uint8, dtype=np.uint8)
-        def __setitem__(self, index: int | slice, value):
+            self.data = np.zeros(self.n_uint8, dtype=np.uint8)# type: ignore[assignment]
+        def __setitem__(self, index: int | slice, value: Any):
             ctypes_arr = self.data.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
             if isinstance(index, slice):
                 start, stop, step = index.indices(self.size)
@@ -155,6 +164,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             ctypes_arr[uint8_pos] &= ~(1 << bit_offset) & 0xFF
             if value:
                 ctypes_arr[uint8_pos] |= (1 << bit_offset)
+
         def __getitem__(self, index: int | slice) -> bool | list[bool]:
             if isinstance(index, slice):
                 start, stop, step = index.indices(self.size)
@@ -180,7 +190,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             new_instance = self.__class__(size=self.size)
             new_instance.data = self.data.copy()
             return new_instance
-    def __init__(self, split_index: int, size=None, is_sparse=False ,Type:Callable = None,hash_ = True) -> None:
+    def __init__(self, split_index: int, size=None, is_sparse=False ,Type:Callable = None,hash_:Any = True) -> None:
         self.Type = Type if Type is not None else builtins.BHA_Bool
         self.split_index = int(split_index)
         self.size = size or 0
@@ -217,7 +227,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         return func
     def __hash__(self):
         return self._cached_hash
-    def accessor(self, i: int, value: bool|None = None) -> bool|None:
+    def accessor(self, i: int, value: Any = None) -> Any:
         def _get_sparse_info(index: int) -> tuple[int, bool]:
             pos = bisect.bisect_left(self.large, index)
             exists = pos < len(self.large) and self.large[pos] == index
@@ -241,7 +251,12 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                     if pos < len(self.large):
                         del self.large[pos]
                 return None
-    def __getitem__(self, key:int|slice = -1) -> BoolHybridArray:
+    @overload
+    def __getitem__(self, idx: int, /) -> Any: ...
+    @overload
+    def __getitem__(self, idx: slice, /) -> list: ...
+
+    def __getitem__(self, key:int|slice = -1,/) -> Any:
         if isinstance(key, slice):
             start, stop, step = key.indices(self.size)
             return BoolHybridArr((self[i] for i in range(start, stop, step)),hash_ = self.hash_)
@@ -249,7 +264,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         if 0 <= key < self.size:
             return self.Type(self.accessor(key))
         raise IndexError("索引超出范围")
-    def __setitem__(self, key: int | slice, value) -> None:
+    def __setitem__(self, key: int | slice, value:Any) -> None:
         if isinstance(key, int):
             adjusted_key = key if key >= 0 else key + self.size
             if not (0 <= adjusted_key < self.size):
@@ -284,15 +299,23 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __repr__(self) -> str:
         return(f"BoolHybridArray(split_index={self.split_index}, size={self.size}, "
         +f"is_sparse={self.is_sparse}, small_len={len(self.small)}, large_len={len(self.large)})")
-    def __delitem__(self, key: int = -1) -> None:
+    @overload
+    def __delitem__(self, key: int, /) -> None: ...
+    @overload
+    def __delitem__(self, key: slice, /) -> None: ...
+
+    def __delitem__(self, key: int|slice = -1,/) -> None:
         key = key if key >= 0 else key + self.size
+        if isinstance(key, slice):
+            start, stop, step = key.indices(self.size)
+            for i in range(start,stop,step):del self[i]
         if not (0 <= key < self.size):
             raise IndexError(f"索引 {key} 超出范围 [0, {self.size})")
         if key <= self.split_index:
             if key >= len(self.small):
                 raise IndexError(f"小索引 {key} 超出small数组范围（长度{len(self.small)}）")
-            self.small = np.delete(self.small, key)
-            self.small = np.append(self.small, not self.is_sparse)
+            self.small = np.delete(self.small, key)# type: ignore[assignment]
+            self.small = np.append(self.small, not self.is_sparse)# type: ignore[assignment]
             self.split_index -= min(self.split_index, len(self.small) - 1)
         else:
             pos = bisect.bisect_left(self.large, key)
@@ -304,7 +327,10 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         self.size -= 1
     def __str__(self) -> str:
         return f"BoolHybridArr([{','.join(map(str,self))}])"
-    def insert(self, key: int, value: bool) -> None:
+    def __reversed__(self):
+        if not self:return BHA_Iterator([])
+        return BHA_Iterator(map(self.__getitem__,range(-1,-1,-1)))
+    def insert(self, key: int, value: Any) -> None:
         value = bool(value)
         key = key if key >= 0 else key + self.size
         key = max(0, min(key, self.size))
@@ -315,7 +341,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                     (0, key - len(self.small) + 1),
                     constant_values=not self.is_sparse
                 )
-            self.small = np.insert(self.small, key, value)
+            self.small = np.insert(self.small, key, value)# type: ignore[assignment]
             self.split_index = min(self.split_index + 1, len(self.small) - 1)
         else:
             pos = bisect.bisect_left(self.large, key)
@@ -325,12 +351,13 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                 self.large.insert(pos, key)
         self.size += 1
     def __len__(self) -> int:
-        return self.size
+        return int(self.size)
     def __iter__(self):
+        if not self:return BHA_Iterator([])
         return BHA_Iterator(map(self.__getitem__,range(self.size)))
     def __next__(self):
         return next(self.generator)
-    def __contains__(self, value) -> bool:
+    def __contains__(self, value:Any) -> bool:
         if not isinstance(value, (bool,np.bool_,self.Type,BHA_bool)):return False
         if not self.size:return False
         for i in range(10):
@@ -342,11 +369,11 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         else:
             return len(self.large) == self.size-self.split_index-1 or b
     def __bool__(self) -> bool:
-        return self.size
+        return bool(self.size)
     def __any__(self):
-        return T in self
+        return builtins.T in self
     def __all__(self):
-        return F not in self
+        return builtins.F not in self
     def __eq__(self, other) -> bool:
         if not isinstance(other, (BoolHybridArray, list, tuple, np.ndarray, array.array)):
             return False
@@ -409,8 +436,6 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         arr += other
         arr.optimize()
         return arr
-    def __invert__(self) -> BoolHybridArray:
-        return BoolHybridArr(not val for val in self)
     def __rand__(self, other) -> BoolHybridArray:
         if type(other) == int:
             other = bin(other)[2:]
@@ -484,8 +509,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def count(self, value) -> int:
         value = bool(value)
         return sum(v == value for v in self)
-    def optimize(self) -> None:
-        arr = BoolHybridArr(self)
+    def optimize(self,*a,**k) -> BoolHybridArray:
+        arr = BoolHybridArr(self,*a,**k)
         self.large,self.small,self.split_index,self.is_sparse = (arr.large,arr.small,
         arr.split_index,arr.is_sparse)
         gc.collect()
@@ -531,9 +556,10 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __reduce__(self):
         return BoolHybridArr,(np.asarray(self),self.is_sparse,self.Type,self.hash_,),
     dequeue = lambda self:self.pop(0)
-class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
+@mypyc_attr(native_class=False)
+class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
-    def __new__(cls, lst: Iterable, is_sparse=None, Type = None, hash_ = True) -> BoolHybridArray:
+    def __new__(cls, lst: Iterable = (), is_sparse=None, Type = None, hash_ = True, split_index = None) -> BoolHybridArray:
         a = isinstance(lst, (Iterator, Generator, map))
         if a:
             lst, copy1, copy2 = itertools.tee(lst, 3)
@@ -546,9 +572,10 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
             return BoolHybridArray(0, 0, is_sparse=False if is_sparse is None else is_sparse)
         if is_sparse is None:
             is_sparse = true_count <= (size - true_count)
-        split_index = int(min(size * 0.8, math.sqrt(size) * 100))
-        split_index = math.isqrt(size) if true_count>size/3*2 or true_count<size/3 else max(split_index, 1)
-        split_index = int(split_index) if split_index < 150e+7*2 else int(145e+7*2)
+        if split_index == None:
+            split_index = int(min(size * 0.8, math.sqrt(size) * 100))
+            split_index = math.isqrt(size) if true_count>size/3*2 or true_count<size/3 else max(split_index, 1)
+            split_index = int(split_index) if split_index < 150e+7*2 else int(145e+7*2)
         arr = BoolHybridArray(split_index = split_index, size = size, is_sparse = is_sparse, Type = Type, hash_ = F)
         small_max_idx = min(split_index, size - 1)
         if a:
@@ -605,7 +632,8 @@ def FalsesArray(size, Type = None,hash_ = True):
     split_index = int(split_index) if split_index < 150e+7*2 else int(145e+7*2)
     return BoolHybridArray(split_index,size,True,Type = Type,hash_ = hash_)
 Bool_Array = np.arange(2,dtype = np.uint8)
-class BHA_bool(int,metaclass=ResurrectMeta):
+@mypyc_attr(native_class=False)
+class BHA_bool(int,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __new__(cls, value):
         core_value = bool(value)
@@ -639,16 +667,14 @@ class BHA_bool(int,metaclass=ResurrectMeta):
     def __len__(self):
         raise TypeError("'BHA_bool' object has no attribute '__len__'")
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
-class BHA_Bool(BHA_bool,metaclass=ResurrectMeta):
+@mypyc_attr(native_class=False)
+class BHA_Bool(BHA_bool,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     @lru_cache
     def __new__(cls,v):
-        if(builtins.T == True)and(builtins.F == False):
-            return builtins.T if v else builtins.F
-        else:
-            builtins.T,builtins.F = BHA_Bool.T,BHA_Bool.F
-            return BHA_Bool.T if v else BHA_Bool.F
-class BHA_List(list,metaclass=ResurrectMeta):
+        return builtins.T if v else builtins.F
+@mypyc_attr(native_class=False)
+class BHA_List(list,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __init__(self,arr):
         def Temp(v):
@@ -712,13 +738,14 @@ class BHA_List(list,metaclass=ResurrectMeta):
     def to_ascii_art(self, width=20):
         art = '\n'.join([' '.join(['■' if j else ' '  for j in i]) for i in self])
         return art
-class BHA_Iterator(Iterator,metaclass=ResurrectMeta):
+@mypyc_attr(native_class=False)
+class BHA_Iterator(Iterator,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __init__(self,data):
         self.data,self.copy_data = itertools.tee(iter(data),2)
     def __next__(self):
         try:return next(self.data)
-        except Exception as e:
+        except StopIteration as e:
             self.__init__(self.copy_data)
             raise e
     def __iter__(self):
@@ -733,12 +760,13 @@ class BHA_Iterator(Iterator,metaclass=ResurrectMeta):
         arr = np.fromiter(self, dtype=dtype)
         return arr.copy() if copy else arr.view()
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
-class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
+@mypyc_attr(native_class=False)
+class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
     def __init__(self, *args, protected_names = ("T", "F", "BHA_Bool", "BHA_List", "BoolHybridArray", "BoolHybridArr",
                                 "TruesArray", "FalsesArray", "ProtectedBuiltinsDict", "builtins",
                                 "__builtins__", "__dict__","ResurrectMeta","math",
                                 "np","protected_names","BHA_Function",
-                                "__class__","Ask_BHA","Create_BHA","Ask_arr","numba_opt"),
+                                "__class__","Ask_BHA","Create_BHA","Ask_arr","numba_opt","bool_hybrid_array"),
                  name = 'builtins', **kwargs):
         super().__init__(*args, **kwargs)
         if name == 'builtins':
@@ -810,6 +838,7 @@ def Ask_arr(arr):
         return h
     else:
         return str(arr)
+@BHA_Function
 def Ask_BHA(path):
     if '.bha' not in path.lower():
         path += '.bha'
@@ -832,12 +861,41 @@ def Ask_BHA(path):
         memcpy(arr.buffer_info()[0], bit_stream, total_len),arr)[-1]
         if(n := int(x, base=16),
         lead_zero := len(x) - len(x.lstrip('0')),
-        total_len := lead_zero + (n.bit_length() if n else 1))
+        total_len := lead_zero + n.bit_length())
         else array.array('B'))
         temp = BHA_List(map(temp2,temp))
         if len(temp) == 1:
             return temp[0]
         return temp
+class BHA_Queue:
+    def __init__(self,data = (),*a,**k):
+        self.a = BoolHybridArr(data,*a,**k)
+        self.b = BoolHybridArr([],*a,**k)
+    def __str__(self):
+        return f"BHA_Queue([{','.join(itertools.chain(map(str,reversed(self.b)),map(str,self.a)))}])"
+    __repr__ = __str__
+    def enqueue(self,v):
+        self.a.push(v)
+    def dequeue(self):
+        if self.b:
+            print("正常执行")
+            return self.b.pop()
+        elif self.a:
+            tmp = self.a[::-1]
+            self.b.split_index,self.b.large,self.b.small,self.b.is_sparse = tmp.split_index,tmp.large,tmp.small,tmp.is_sparse
+            print(f"self.b：{self.b}")
+            self.a.clear()
+            return self.dequeue()
+        else:
+            raise IndexError("无法从空的 BHA_Queue 队列执行出队操作")
+    def __iter__(self):
+        yield from reversed(self.b)
+        yield from self.a
+    def __len__(self):
+        return len(self.a)+len(self.b)
+    def is_empty(self):
+        return not self
+@BHA_Function
 def Create_BHA(path,arr):
     if '.bha' not in path.lower():
         path += '.bha'
@@ -854,7 +912,7 @@ def Create_BHA(path,arr):
             mm[:] = temp
             mm.flush()
 def numba_opt():
-    import numba
+    import numba # type: ignore
     sig = numba.types.Union([
         numba.types.intp(
             numba.types.Array(numba.types.uint32, 1, 'C'),
@@ -894,7 +952,7 @@ builtins.BHA_Function = BHA_Function
 builtins.Ask_BHA = Ask_BHA
 builtins.Create_BHA = Create_BHA
 builtins.numba_opt = numba_opt
-Tid,Fid = id(T),id(F)
+Tid,Fid = id(builtins.T),id(builtins.F)
 original_id = builtins.id
 def fake_id(obj):
     if isinstance(obj, BHA_bool):return Tid if obj else Fid
@@ -905,7 +963,3 @@ __builtins__ = ProtectedBuiltinsDict(original_builtins_dict)
 builtins = __builtins__
 sys.modules['builtins'] = builtins
 builtins.name = 'builtins'
-try:
-    sys.flags.optimize = 2
-except:
-    pass

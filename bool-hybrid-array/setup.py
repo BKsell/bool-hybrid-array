@@ -12,7 +12,7 @@ if sys.implementation.name == "pypy":
                 sys.exit(f"❌ 错误：bool-hybrid-array 要求 PyPy≥7.3.10，当前版本 {pypy_ver}")
 setup(
     name="bool-hybrid-array",
-    version="9.11.4",
+    version="9.11.8",
     author="蔡靖杰",
     extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],},
     author_email="1289270215@qq.com",

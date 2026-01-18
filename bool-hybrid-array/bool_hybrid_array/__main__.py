@@ -288,3 +288,24 @@ try:
 except OverflowError as e:
     print(f"\n❌ NumPy存储失败：{e}")
 
+
+#BHA_Queue（9.11.5版本新增）
+
+q = BHA_Queue([T, F, T, T, F])
+
+print(f"初始化队列: {q}")  # 输出：BHA_Queue([T,F,T,T,F])
+
+q.enqueue(T)
+
+q.enqueue(F)
+
+print(f"入队2个元素后: {q}")  # 输出：BHA_Queue([T,F,T,T,F,T,F])
+
+# 3. 出队（dequeue，均摊O(1)，仅首次触发转移）
+
+print(f"第一次出队: {q.dequeue()}")  # 输出：T（触发 self.a → self.b 转移，仅1次）
+
+print(f"第二次出队: {q.dequeue()}")  # 输出：F（直接从 self.b 弹出，纯O(1)）
+
+print(f"出队2个元素后: {q}")  # 输出：BHA_Queue([T,T,F,T,F])
+

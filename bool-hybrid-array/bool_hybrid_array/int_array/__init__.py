@@ -97,7 +97,7 @@ class IntHybridArray(BoolHybridArray):
     def __setitem__(self, key, value):
         tmp = list(self)
         tmp[key] = value
-        self.__dict__ = IntHybridArray(tmp).__dict__
+        self.__init__(tmp)
     def __iter__(self):
         return map(self.__getitem__,range(len(self)))
 
