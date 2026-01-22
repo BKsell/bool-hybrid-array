@@ -3,6 +3,7 @@ README.md
 setup.py
 bool_hybrid_array/__init__.py
 bool_hybrid_array/__main__.py
+bool_hybrid_array/_cppiostream.py
 bool_hybrid_array/compile_core.pyd
 bool_hybrid_array/core.c
 bool_hybrid_array/core.py
@@ -13,3 +14,4 @@ bool_hybrid_array.egg-info/dependency_links.txt
 bool_hybrid_array.egg-info/requires.txt
 bool_hybrid_array.egg-info/top_level.txt
 bool_hybrid_array/int_array/__init__.py
+bool_hybrid_array/int_array/core.py

@@ -12,7 +12,7 @@ if sys.implementation.name == "pypy":
                 sys.exit(f"❌ 错误：bool-hybrid-array 要求 PyPy≥7.3.10，当前版本 {pypy_ver}")
 setup(
     name="bool-hybrid-array",
-    version="9.11.9",
+    version="9.11.10",
     author="蔡靖杰",
     extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],},
     author_email="1289270215@qq.com",
@@ -23,6 +23,7 @@ setup(
     python_requires=">=3.8",
     install_requires=['numpy>=1.19.0'],
     classifiers=[
+        "Programming Language :: Python",
         "Programming Language :: Python :: 3",
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',

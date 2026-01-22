@@ -1,6 +1,6 @@
 # test_pypy.py
 from bool_hybrid_array import *
-import time,gc,timeit
+import time,gc,timeit,ctypes
 
 arr = BoolHybridArr([T,F,F,F,T,T,F,F,F,T])
 arr2 = BoolHybridArr([F,F,F,F,T,T,F,T,T,F])

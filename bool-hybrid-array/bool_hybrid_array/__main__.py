@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
 from .__init__ import *
-import io
-
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='ignore')
 
 # 创建实例
 
@@ -308,4 +305,5 @@ print(f"第一次出队: {q.dequeue()}")  # 输出：T（触发 self.a → self.
 print(f"第二次出队: {q.dequeue()}")  # 输出：F（直接从 self.b 弹出，纯O(1)）
 
 print(f"出队2个元素后: {q}")  # 输出：BHA_Queue([T,T,F,T,F])
+
 
