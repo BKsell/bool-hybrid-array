@@ -70,7 +70,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):# type: ignore
         try:
             setattr(builtins,cls.name,cls)
             if not sys.is_finalizing():
-                print(f'警告：禁止删除常变量：{cls}！')
+                print(f'\033[31m警告：禁止删除常变量：{cls}！\033[0m')
                 raise TypeError(f'禁止删除常变量：{cls}')
         except NameError:pass
     def __hash__(cls):
@@ -786,10 +786,10 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
                 if isinstance(current_T, BHA_bool) and isinstance(current_F, BHA_bool):
                     is_swap = (name == "T" and isinstance(value, BHA_bool) and value.value == current_F.value)or(name == "F" and isinstance(value, BHA_bool) and value.value == current_T.value)
                     if is_swap:
-                        print(f"""警告：禁止交换内置常量 __{self.name}__["{name}"] 和 __builtins__["{'F' if name == 'T' else 'T'}"]！""")
+                        print(f"""\033[31m警告：禁止交换内置常量 __{self.name}__["{name}"] 和 __builtins__["{'F' if name == 'T' else 'T'}"]！\033[0m""")
                         raise AttributeError(f"""禁止交换内置常量 __{self.name}__["{name}"] 和 __{self.name}__["{'F' if name == 'T' else 'T'}"]""")
             if name in self.protected_names and name not in ["T", "F"]:
-                print(f"警告：禁止修改内置常量 __{self.name}__['{name}']！")
+                print(f"\033[31m警告：禁止修改内置常量 __{self.name}__['{name}']！\033[0m")
                 raise AttributeError(f"禁止修改内置常量 __{self.name}__['{name}']")
         except:
             if sys.implementation.name == 'cpython':
@@ -797,7 +797,7 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
         finally:super().__setitem__(name, value)
     def __delitem__(self, name):
         if name in self.protected_names:
-            print(f"警告：禁止删除内置常量 __builtins__['{name}']！")
+            print(f"\033[31m警告：禁止删除内置常量 __builtins__['{name}']！\033[0m")
             raise AttributeError(f"禁止删除内置常量 __builtins__['{name}']")
         if name in self:
             super().__delitem__(name)

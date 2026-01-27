@@ -1,6 +1,7 @@
 import sys
 from ctypes import *
 import ctypes
+import numpy as np
 try:
     import msvcrt
 except:
@@ -8,25 +9,31 @@ except:
 class InPutObject:
     def __init__(self):
         self._stdout = sys.stdout
+        self.backch = " \b"
         if sys.platform == "win32":
             self._get_char = lambda: ord(msvcrt.getche())
-            self.backch = " \b"
+            self.eof = 26
         else:
             libc_path = "libc.so.6" if sys.platform == "linux" else "libSystem.B.dylib"
-            self.libc = ctypes.cdll.LoadLibrary(libc_path)
-            self._get_char = lambda:(c:=ord(self.libc.getchar()),
-                self._stdout.write(chr(c)),self._stdout.flush())[0]
-            self.backch = "\b \b"
+            try:self.libc = ctypes.cdll.LoadLibrary(libc_path)
+            except:self.libc= ctypes.CDLL("libc.so")
+            self._get_char = lambda:(c:=self.libc.getchar(),
+                self._stdout.write(chr(c) if c != -1 else '\0'),self._stdout.flush())[0]
+            self.eof = -1
         self._whitespace = {ord('\n'), ord('\t'), ord(' '), 0, ord("\r")}
         self.getchar = self._get_char
         self._buf = []
+        self.eofbit = False
     
     def _read_char(self):
         while True:
             if self._buf:char = self._buf.pop(0)
             else:char = self._get_char()
-            if char in self._whitespace or char == -1:
+            if char in self._whitespace:
                 continue
+            if char == self.eof:
+                self.eofbit = True
+                return 0
             return char
 
     def _parse_int(self):
@@ -36,7 +43,8 @@ class InPutObject:
                 char = self._buf.pop(0)
             else:
                 char = self._get_char()
-            if char in self._whitespace or char == -1:
+            if char in self._whitespace or char==self.eof:
+                self.eofbit = char==self.eof
                 break
             if char == 8:
                 sys.stdout.write(self.backch)
@@ -60,7 +68,8 @@ class InPutObject:
                 char = self._buf.pop(0)
             else:
                 char = self._get_char()
-            if char in self._whitespace or char == -1:
+            if char in self._whitespace or char == self.eof:
+                self.eofbit = char==self.eof
                 break
             if char == 8:
                 sys.stdout.write(self.backch)
@@ -83,7 +92,8 @@ class InPutObject:
                 char = self._buf.pop(0)
             else:
                 char = self._get_char()
-            if char in self._whitespace or char == -1:
+            if char in self._whitespace or char == self.eof:
+                self.eofbit = char==self.eof
                 break
             if char == 8:
                 sys.stdout.write(self.backch)
@@ -101,13 +111,14 @@ class InPutObject:
 
     def _parse_char(self):
         char = self._read_char()
-        return chr(char) if char not in self._whitespace and char != -1 else '\0'
+        return chr(char) if char not in self._whitespace else '\0'
 
     def _parse_char_array(self, max_len=1024):
         chars = []
         count = 0
         while count < max_len - 1:
-            char = self._get_char()
+            if self._buf:char = self._buf.pop(0)
+            else:char = self._get_char()
             if char == 8:
                 sys.stdout.write(self.backch)
                 sys.stdout.flush()
@@ -116,7 +127,8 @@ class InPutObject:
                 except:
                     pass
                 continue
-            if char in self._whitespace or char == -1:
+            if char in self._whitespace or char == self.eof:
+                self.eofbit = char==self.eof
                 break
             chars.append(chr(char))
             count += 1
@@ -128,7 +140,8 @@ class InPutObject:
                 char = self._buf.pop(0)
             else:
                 char = self._get_char()
-            if char in self._whitespace or char == -1:
+            if char in self._whitespace or char == self.eof:
+                self.eofbit = char==self.eof
                 break
             if char == 8:
                 sys.stdout.write(self.backch)
@@ -144,6 +157,8 @@ class InPutObject:
             chars.append(chr(char))
         return ''.join(chars) if chars else '0'
     def __rshift__(self, target):
+        if self.eofbit:
+            raise EOFError("Input stream reached EOF while parsing integer")
         if isinstance(target, ctypes._SimpleCData):
             target_type = type(target)
             if target_type == c_void_p:
@@ -205,6 +220,10 @@ class InPutObject:
         return self
     __str__ = lambda self:""
     __repr__ = lambda self:""
+    __bool__ = lambda self:not self._buf or self.eofbit
+    def clear(self):
+        self._buf.clear()
+        self.eofbit = False
 class OutPutObject:
     def __lshift__(self, data):
         sys.stdout.write(str(data))
@@ -213,4 +232,4 @@ class OutPutObject:
     __repr__ = lambda self:""
 cin = InPutObject()
 cout = OutPutObject()
-endl = "\n"
+endl = "\r\n"

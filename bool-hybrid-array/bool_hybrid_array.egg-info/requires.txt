@@ -1,5 +1,8 @@
 numpy>=1.19.0
 
+[cython_opt]
+cython>=3.2.4
+
 [int_array]
 
 [numba_opt]

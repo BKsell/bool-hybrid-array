@@ -1,5 +1,9 @@
 from setuptools import setup, find_packages
-import os,sys
+import os,sys,subprocess
+try:
+    import cython
+    subprocess.run([sys.executable,"-m","cythonize","bool_hybrid_array/core.py"])
+except:pass
 def get_long_description():
     readme_path = os.path.join(os.path.dirname(__file__), 'README.md')
     if os.path.exists(readme_path):
@@ -9,12 +13,12 @@ def get_long_description():
 if sys.implementation.name == "pypy":
             if not hasattr(sys, "pypy_version_info") or sys.pypy_version_info[:3] < (7, 3, 10):
                 pypy_ver = ".".join(map(str, sys.pypy_version_info)) if hasattr(sys, "pypy_version_info") else "未知"
-                sys.exit(f"❌ 错误：bool-hybrid-array 要求 PyPy≥7.3.10，当前版本 {pypy_ver}")
+                sys.exit(f"\033[31m❌ 错误：bool-hybrid-array 要求 PyPy≥7.3.10，当前版本 {pypy_ver}\033[0m")
 setup(
     name="bool-hybrid-array",
-    version="9.11.10",
+    version="9.11.11",
     author="蔡靖杰",
-    extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],},
+    extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],"cython_opt":["cython>=3.2.4"]},
     author_email="1289270215@qq.com",
     description="一个高效的布尔数组（密集+稀疏混合存储，节省内存）",
     long_description=get_long_description(),
@@ -23,6 +27,7 @@ setup(
     python_requires=">=3.8",
     install_requires=['numpy>=1.19.0'],
     classifiers=[
+        "Programming Language :: Cython",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
         'Programming Language :: Python :: 3.8',

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys
 from types import ModuleType,FunctionType
-try:from . import compile_core
+try:from . import compile_core as core
 except:from . import core
 from .core import __builtins__,builtins
 try:from . import int_array

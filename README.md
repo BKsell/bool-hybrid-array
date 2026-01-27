@@ -571,7 +571,7 @@ print(f"出队2个元素后: {q}")  # 输出：BHA_Queue([T,T,F,T,F])
 * **9.11.8**：增加了Windows系统Python3.14的C扩展优化
 * **9.11.9**：修复BHA_Queue的bug，新增cin和cout（使用方式：a = ctypes.c_int();cin >> a;cout << a，支持各种ctypes类型、numpy标量）
 * **9.11.10**：修复cin的AttributeError的错误
-
+* **9.11.11**：新增cin对EOF的处理
 
 
 
