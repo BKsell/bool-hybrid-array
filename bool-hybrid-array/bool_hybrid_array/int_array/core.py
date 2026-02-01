@@ -2,6 +2,37 @@ from __future__ import annotations
 from collections.abc import Iterable
 from ..core import *
 import builtins
+def block_insert_sort(arr, start, end):
+    for i in range(start + 1, end):
+        current = arr[i]
+        insert_pos = bisect.bisect_right(arr, current, start, i)
+        j = i
+        while j > insert_pos:
+            arr[j], arr[j-1] = arr[j-1], arr[j]
+            j -= 1
+def merge_two_blocks(arr, left_start, left_end, right_end):
+    if arr[left_end - 1] <= arr[left_end]:
+        return
+    left = arr[left_start:left_end]
+    right = arr[left_end:right_end]
+    i = j = 0
+    k = left_start
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            arr[k] = left[i]
+            i += 1
+        else:
+            arr[k] = right[j]
+            j += 1
+        k += 1
+    while i < len(left):
+        arr[k] = left[i]
+        i += 1
+        k += 1
+    while j < len(right):
+        arr[k] = right[j]
+        j += 1
+        k += 1
 class IntBitTag(BHA_bool, metaclass=ResurrectMeta):
     def __str__(self):
         return "'-1'" if (hasattr(self, 'is_sign_bit') and self.is_sign_bit and self) else "'1'" if self else "'0'"
@@ -95,9 +126,14 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
         return self.to_int(bit_chunk)
 
     def __setitem__(self, key, value):
-        tmp = list(self)
-        tmp[key] = value
-        self.__init__(tmp)
+        tmp1 = IntHybridArray([value],bit_length = self.bit_length)
+        tmp = tmp1.view()
+        if tmp1[0] == value:
+            super().__setitem__(slice(key*self.bit_length,(key+1)*self.bit_length),tmp)
+        else:
+            lst = list(self)
+            lst[key] = value
+            self.__init__(lst)
     def __iter__(self):
         return map(self.__getitem__,range(len(self)))
 
@@ -152,3 +188,17 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
         self.total_bits += self.bit_length
         self.size = self.total_bits
         self[-1] = value
+    def sort(self):
+        n = len(self)
+        BLOCK_SIZE = 32
+        for start in range(0, n, BLOCK_SIZE):
+            end = min(start + BLOCK_SIZE, n)
+            block_insert_sort(self, start, end)
+        merge_size = BLOCK_SIZE
+        while merge_size < n:
+            for start in range(0, n, merge_size * 2):
+                mid = min(start + merge_size, n)
+                end = min(start + merge_size * 2, n)
+                if mid < end:
+                    merge_two_blocks(self, start, mid, end)
+            merge_size *= 2        

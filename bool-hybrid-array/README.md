@@ -572,6 +572,8 @@ print(f"出队2个元素后: {q}")  # 输出：BHA_Queue([T,T,F,T,F])
 * **9.11.9**：修复BHA_Queue的bug，新增cin和cout（使用方式：a = ctypes.c_int();cin >> a;cout << a，支持各种ctypes类型、numpy标量）
 * **9.11.10**：修复cin的AttributeError的错误
 * **9.11.11**：新增cin对EOF的处理
+* **9.11.12**：优化了IntHybridArray的__setitem__，新增了IntHybridArray的sort
+* **9.11.13**：修复IndexError的错误
 
 
 

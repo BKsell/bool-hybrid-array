@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 import os,sys,subprocess
 try:
-    import cython
+    import Cython
     subprocess.run([sys.executable,"-m","cythonize","bool_hybrid_array/core.py"])
 except:pass
 def get_long_description():
@@ -16,9 +16,9 @@ if sys.implementation.name == "pypy":
                 sys.exit(f"\033[31m❌ 错误：bool-hybrid-array 要求 PyPy≥7.3.10，当前版本 {pypy_ver}\033[0m")
 setup(
     name="bool-hybrid-array",
-    version="9.11.11",
+    version="9.11.13",
     author="蔡靖杰",
-    extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],"cython_opt":["cython>=3.2.4"]},
+    extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],"cython_opt":["cython>=3.2.4"],"cycy opt":["cycy-runtime>=0.2.4"]},
     author_email="1289270215@qq.com",
     description="一个高效的布尔数组（密集+稀疏混合存储，节省内存）",
     long_description=get_long_description(),

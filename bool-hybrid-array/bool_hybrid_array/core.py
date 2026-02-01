@@ -283,6 +283,10 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
                 for i, val in zip(slice_indices, value_list):
                     self[i] = val
                 return
+            if new_len == max(0, stop - start):
+                for v,i in zip(new_len,range(start,stop)):
+                    self[i] = v
+                return
             for i in range(stop - 1, start - 1, -1):
                 if i <= self.split_index:
                     if i >= len(self.small):
