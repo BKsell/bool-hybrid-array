@@ -15,6 +15,7 @@ from functools import lru_cache
 from typing import _GenericAlias
 from typing import Callable, Union, Sequence, MutableSequence, Any, overload, Sized
 hybrid_array_cache:list[tuple[Any]] = []
+index_range=lambda BHA:(BHA[i] for i in itertools.count(0) if i < BHA.size)
 try:
     msvcrt = ctypes.CDLL('msvcrt.dll')
     memcpy = msvcrt.memcpy
@@ -277,14 +278,14 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             value_list = list(value)
             new_len = len(value_list)
             if step != 1:
-                slice_indices = list(range(start, stop, step))
+                slice_indices = range(start, stop, step)
                 if new_len != len(slice_indices):
                     raise ValueError(f"值长度与切片长度不匹配：{new_len} vs {len(slice_indices)}")
                 for i, val in zip(slice_indices, value_list):
                     self[i] = val
                 return
             if new_len == max(0, stop - start):
-                for v,i in zip(new_len,range(start,stop)):
+                for v,i in zip(value_list,range(start,stop)):
                     self[i] = v
                 return
             for i in range(stop - 1, start - 1, -1):
@@ -358,7 +359,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         return int(self.size)
     def __iter__(self):
         if not self:return BHA_Iterator([])
-        return BHA_Iterator(map(self.__getitem__,range(self.size)))
+        return BHA_Iterator(map(self.__getitem__,index_range(size)))
     def __next__(self):
         return next(self.generator)
     def __contains__(self, value:Any) -> bool:
@@ -427,7 +428,6 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             return self
         if not self.is_sparse:
             self += FalsesArray(int(other))
-            self.optimize()
         else:
             self.size += int(other)
         return self
@@ -448,6 +448,14 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         if len(self) != len(other):
             raise ValueError(f"异或运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.xor, self, other),hash_ = self.hash_)
+    def __gt__(self,other):
+        if self.size!=len(other)
+            return self.size>len(other)
+        return any(map(operator.gt,self,other)
+    def __lt__(self,other):
+        if self.size!=len(other)
+            return self.size<len(other)
+        return any(map(operator.lt,self,other)
     def __rxor__(self, other) -> BoolHybridArray:
         return self^other
     def __invert__(self) -> BoolHybridArray:
@@ -939,6 +947,13 @@ def numba_opt():
     bisect.bisect_left = numba.njit(sig, cache=True)(bisect.bisect_left)
     bisect.bisect_right = numba.njit(sig, cache=True)(bisect.bisect_right)
 from ._cppiostream import cin,cout,endl
+def namespace(name,bases,namespace_):
+    tmp = {}
+    for base in bases:tmp.update(base.__namespace__)
+    self = ProtectedBuiltinsDict({**tmp,**namespace_},name = name,protected_names = namespace_.get("protected_names",()))
+    self["__namespace__"] = self
+    return self
+
 builtins.np = np
 builtins.T = BHA_bool(1)
 builtins.F = BHA_bool(0)

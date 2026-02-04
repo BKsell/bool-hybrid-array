@@ -1,5 +1,8 @@
 numpy>=1.19.0
 
+[cycy opt]
+cycy-runtime>=0.2.4
+
 [cython_opt]
 cython>=3.2.4
 

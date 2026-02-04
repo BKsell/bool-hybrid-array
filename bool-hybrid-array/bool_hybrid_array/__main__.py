@@ -306,4 +306,41 @@ print(f"第二次出队: {q.dequeue()}")  # 输出：F（直接从 self.b 弹出
 
 print(f"出队2个元素后: {q}")  # 输出：BHA_Queue([T,T,F,T,F])
 
+#float_array子包（9.11.15版本新增）
 
+# 1. 初始化数组
+f_arr = float_array.FloatHybridArray([1.1, 2.2, 3.3, 4.4, 5.5])
+
+# 2. 获取元素
+first_elem = f_arr[0]     # 获取第一个元素：BHA_Float(1.1)
+print(f"第一个元素：{first_elem}")
+
+# 3. 修改元素
+f_arr[1] = 9.9            # 修改第二个元素为 9.9
+print(f"修改后第二个元素：{f_arr[1]}")
+
+# 4. 添加元素
+f_arr.append(6.6)         # 追加元素 6.6
+print(f"数组长度：{len(f_arr)}")  # 输出：6
+
+# 5. 遍历数组
+for elem in f_arr:
+    print(f"数组元素：{elem}")
+
+#namespace元类（9.11.15版本新增）
+class BaseMathTools(metaclass = namespace):
+    pi = 3.141
+    def add(a,b):
+        return a+b
+    protected_names = ("pi","add")
+
+class MathTools(BaseMathTools,metaclass = namespace):
+    pi = 3.1415926535897932
+    def mul(a,b):
+        return a*b
+    def sub(a,b):
+        return a-b
+    e = 2.718281828
+    protected_names = (*BaseMathTools.protected_names,"e","sub","mul")
+
+print(MathTools.mul(10,23))#输出：230
