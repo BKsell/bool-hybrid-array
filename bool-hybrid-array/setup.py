@@ -16,7 +16,7 @@ if sys.implementation.name == "pypy":
                 sys.exit(f"\033[31m❌ 错误：bool-hybrid-array 要求 PyPy≥7.3.10，当前版本 {pypy_ver}\033[0m")
 setup(
     name="bool-hybrid-array",
-    version="9.11.15",
+    version="9.11.16",
     author="蔡靖杰",
     extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],"cython_opt":["cython>=3.2.4"],"cycy opt":["cycy-runtime>=0.2.4"]},
     author_email="1289270215@qq.com",

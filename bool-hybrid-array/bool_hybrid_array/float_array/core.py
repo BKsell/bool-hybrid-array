@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from ..int_array import IntHybridArray
 from ..core import BHA_Iterator
 import operator,math,itertools
-class BHA_Float(float):
+class BHA_Float:
     def __init__(self, data: int | str | float | BHA_Float | tuple):
         if isinstance(data, tuple):
             self.a,self.b,self.length = data
@@ -155,4 +155,4 @@ class FloatHybridArray(Sequence):
     def __len__(self):
         return len(self.a)
     def __iter__(self):
-        return BHA_Iterator(self[i] for i in itertools.count(0) if i < len(self))
+        return BHA_Iterator(value for value in itertools.takewhile(lambda x: x < len(self), itertools.count(0)))

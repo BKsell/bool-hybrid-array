@@ -129,7 +129,8 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
         tmp1 = IntHybridArray([value],bit_length = self.bit_length)
         tmp = tmp1.view()
         if tmp1[0] == value:
-            super().__setitem__(slice(key*self.bit_length,(key+1)*self.bit_length),tmp)
+            for i,v in zip(range(key*self.bit_length,(key+1)*self.bit_length),tmp):
+                super().__setitem__(i,v)
         else:
             lst = list(self)
             lst[key] = value

@@ -6,7 +6,7 @@ except:from . import core
 from .core import __builtins__,builtins
 try:from . import int_array,float_array
 except:pass
-__version__ = "9.11.15"
+__version__ = "9.11.16"
 public_objects = []
 for name in dir(core):
     if not name.startswith("_"):

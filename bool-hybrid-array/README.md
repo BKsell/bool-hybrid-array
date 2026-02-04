@@ -613,6 +613,7 @@ print(MathTools.mul(10,23))#输出：230
 * **9.11.13**：修复IndexError的错误
 * **9.11.14**：新增BoolHybridArray数组的大小比较
 * **9.11.15**：新增float_array子包和namespace元类
+* **9.11.16**：修复SyntaxError错误
 
 
 

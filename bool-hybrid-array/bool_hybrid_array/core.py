@@ -15,7 +15,6 @@ from functools import lru_cache
 from typing import _GenericAlias
 from typing import Callable, Union, Sequence, MutableSequence, Any, overload, Sized
 hybrid_array_cache:list[tuple[Any]] = []
-index_range=lambda BHA:(BHA[i] for i in itertools.count(0) if i < BHA.size)
 try:
     msvcrt = ctypes.CDLL('msvcrt.dll')
     memcpy = msvcrt.memcpy
@@ -359,7 +358,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         return int(self.size)
     def __iter__(self):
         if not self:return BHA_Iterator([])
-        return BHA_Iterator(map(self.__getitem__,index_range(size)))
+        return BHA_Iterator(map(self.__getitem__,itertools.takewhile(lambda x: x < self.size, itertools.count(0))))
     def __next__(self):
         return next(self.generator)
     def __contains__(self, value:Any) -> bool:
@@ -449,13 +448,13 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             raise ValueError(f"异或运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.xor, self, other),hash_ = self.hash_)
     def __gt__(self,other):
-        if self.size!=len(other)
+        if self.size!=len(other):
             return self.size>len(other)
-        return any(map(operator.gt,self,other)
+        return any(map(operator.gt,self,other))
     def __lt__(self,other):
-        if self.size!=len(other)
+        if self.size!=len(other):
             return self.size<len(other)
-        return any(map(operator.lt,self,other)
+        return any(map(operator.lt,self,other))
     def __rxor__(self, other) -> BoolHybridArray:
         return self^other
     def __invert__(self) -> BoolHybridArray:
