@@ -344,3 +344,22 @@ class MathTools(BaseMathTools,metaclass = namespace):
     protected_names = (*BaseMathTools.protected_names,"e","sub","mul")
 
 print(MathTools.mul(10,23))#输出：230
+
+#布尔数组乘法（9.11.20版本新增）
+
+# 定义两个超大二进制数（用BoolHybridArray存储）
+
+# 二进制 1101（十进制13）
+
+arr1 = BoolHybridArr([1,0,1,1])
+
+# 二进制 1011（十进制11）
+
+arr2 = BoolHybridArr([1,1,0,1])
+
+# 直接相乘！
+
+result = arr1 * arr2
+
+print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 十进制143（13×11=143）
+

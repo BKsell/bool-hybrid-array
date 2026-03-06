@@ -1,5 +1,5 @@
 from __future__ import annotations
-from collections.abc import Iterable
+from collections.abc import Iterable,MutableSet
 from ..core import *
 import builtins
 def block_insert_sort(arr, start, end):
@@ -126,6 +126,10 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
         return self.to_int(bit_chunk)
 
     def __setitem__(self, key, value):
+        if isinstance(key, slice):
+            start, stop, step = key.indices(len(self))
+            for i,v in zip(range(start,stop,step),value):self[i] = v
+            return
         tmp1 = IntHybridArray([value],bit_length = self.bit_length)
         tmp = tmp1.view()
         if tmp1[0] == value:
@@ -192,6 +196,15 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
     def sort(self):
         n = len(self)
         BLOCK_SIZE = 32
+        start = 0
+        while start < n - 1:
+            end = start
+            while end < n - 1 and self[end] > self[end + 1]:
+                end += 1
+            segment_length = end - start + 1
+            if segment_length > 3:
+                self[start:end+1] = self[start:end+1][::-1]
+            start = end + 1
         for start in range(0, n, BLOCK_SIZE):
             end = min(start + BLOCK_SIZE, n)
             block_insert_sort(self, start, end)
@@ -203,3 +216,204 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
                 if mid < end:
                     merge_two_blocks(self, start, mid, end)
             merge_size *= 2        
+    def insert(self,index,value):
+        tmp1 = IntHybridArray([value],bit_length = self.bit_length)
+        tmp = tmp1.view()
+        if tmp1[0] == value:
+            for i,v in zip(range(index*self.bit_length,(index+1)*self.bit_length),tmp):
+                super().insert(i,v)
+        else:
+            lst = list(self)
+            lst.insert(index,value)
+            self.__init__(lst)
+
+node_create_count = 0
+
+class RightSplitBlockAVLSet(MutableSet):
+    BLOCK_SIZE = 16
+
+    class BlockNode(ctypes.Structure):
+        def __init__(self):
+            global node_create_count
+            node_create_count += 1
+            
+            self.keys = IntHybridArray([])
+            self.size = 0
+            self.height = 1
+            if "RightSplitBlockAVLSet" in globals():
+                self.left = self.right = ctypes.POINTER(RightSplitBlockAVLSet.BlockNode)()
+    BlockNode._fields_ = [
+            ("keys", ctypes.py_object),
+            ("size", ctypes.c_uint8),
+            ("left", ctypes.POINTER(BlockNode)),
+            ("right", ctypes.POINTER(BlockNode)),
+            ("height", ctypes.c_uint16),
+        ]
+    NULL = BlockNode()
+    NULL.height = 0
+    NULL.size = 0
+
+    def __init__(self, iterable=None):
+        self.root = self.NULL
+        if iterable is not None:
+            for val in iterable:
+                self.add(val)
+
+    def _insert(self, key):
+        if self.root is self.NULL:
+            new_node = self.BlockNode()
+            bisect.insort(new_node.keys, key)
+            new_node.size = 1
+            self.root = new_node
+            return
+
+        current = self.root
+        path = []
+
+        while True:
+            path.append(current)
+            if key in current.keys:
+                return
+            
+            bisect.insort(current.keys, key)
+            current.size = len(current.keys)
+            
+            split_key = None
+            if len(current.keys) > self.BLOCK_SIZE:
+                split_key = current.keys.pop()
+                current.size = len(current.keys)
+            
+            if split_key is not None:
+                right_parent = current
+                right_current = right_parent.right.contents if right_parent.right else self.NULL
+                
+                while True:
+                    if right_current is self.NULL:
+                        new_right = self.BlockNode()
+                        bisect.insort(new_right.keys, split_key)
+                        new_right.size = 1
+                        if not right_parent.right:
+                            right_parent.right = ctypes.pointer(self.NULL)
+                        right_parent.right.contents = new_right
+                        path.append(new_right)
+                        break
+                    
+                    bisect.insort(right_current.keys, split_key)
+                    right_current.size = len(right_current.keys)
+                    
+                    if len(right_current.keys) > self.BLOCK_SIZE:
+                        split_key = right_current.keys.pop()
+                        right_current.size = len(right_current.keys)
+                        right_parent = right_current
+                        right_current = right_parent.right.contents if right_parent.right else self.NULL
+                    else:
+                        path.append(right_current)
+                        break
+            
+            break
+
+        while path:
+            node = path.pop()
+            left_height = self._get_height(node.left.contents) if node.left else 0
+            right_height = self._get_height(node.right.contents) if node.right else 0
+            node.height = 1 + max(left_height, right_height)
+
+    def discard(self, key):
+        if self.root is self.NULL:
+            return
+        
+        current = self.root
+        target_node = None
+        
+        while current is not self.NULL:
+            if key in current.keys:
+                target_node = current
+                break
+            
+            min_key = current.keys[0] if current.keys else None
+            max_key = current.keys[-1] if current.keys else None
+            if min_key and key < min_key:
+                current = current.left.contents if (current.left and current.left.contents is not self.NULL) else self.NULL
+            elif max_key and key > max_key:
+                current = current.right.contents if (current.right and current.right.contents is not self.NULL) else self.NULL
+            else:
+                break
+        
+        if target_node is not None:
+            idx = bisect.bisect_left(target_node.keys, key)
+            if idx < len(target_node.keys) and target_node.keys[idx] == key:
+                target_node.keys.pop(idx)
+                target_node.size = len(target_node.keys)
+                left_height = self._get_height(target_node.left.contents) if target_node.left else 0
+                right_height = self._get_height(target_node.right.contents) if target_node.right else 0
+                target_node.height = 1 + max(left_height, right_height)
+
+    def _get_height(self, node):
+        return node.height if node is not self.NULL else 0
+
+    def add(self, key):
+        if key not in self:
+            self._insert(key)
+
+    def __contains__(self, key):
+        node = self.root
+        while node is not self.NULL:
+            min_key = node.keys[0] if node.keys else None
+            max_key = node.keys[-1] if node.keys else None
+            if min_key and key < min_key:
+                node = node.left.contents if node.left else self.NULL
+            elif max_key and key > max_key:
+                node = node.right.contents if node.right else self.NULL
+            elif (i:=bisect.bisect_left(node.keys,key))<node.size and node.keys[i] == key:
+                return True
+            else:
+                break
+        else:return False
+
+    def _update_heights(self, start_node):
+        stack = []
+        current = start_node
+        while current is not self.NULL or stack:
+            while current is not self.NULL:
+                stack.append(current)
+                current = current.left.contents if current.left else self.NULL
+            current = stack.pop()
+            current.height = 1 + max(self._get_height(current.left.contents) if current.left else 0,
+                                  self._get_height(current.right.contents) if current.right else 0)
+            current = current.right.contents if current.right else self.NULL
+
+    def __len__(self):
+        count = 0
+        stack = []
+        current = self.root
+        while stack or current is not self.NULL:
+            while current is not self.NULL and current.left and current.left.contents is not self.NULL:
+                stack.append(current)
+                current = current.left.contents
+            if current is not self.NULL:
+                count += current.size
+                current = current.right.contents if current.right else self.NULL
+            if not current and stack:
+                current = stack.pop()
+                count += current.size
+                current = current.right.contents if current.right else self.NULL
+        return count
+    def __iter__(self):
+        current = self.root
+        while current is not self.NULL and current:
+            if not current.left or current.left.contents is self.NULL:
+                yield from current.keys
+                current = current.right.contents if current.right else self.NULL
+            else:
+                predecessor = current.left.contents
+                while predecessor.right is not None and predecessor.right.contents is not self.NULL and predecessor.right.contents != current and predecessor.right:
+                    predecessor = predecessor.right.contents
+                if predecessor.right is None or predecessor.right.contents is self.NULL or not predecessor.right:
+                    predecessor.right = ctypes.pointer(current)
+                    current = current.left.contents if current.left else self.NULL
+                else:
+                    predecessor.right = ctypes.pointer(self.NULL)
+                    yield from current.keys
+                    current = current.right.contents if current.right else self.NULL
+    def __str__(self):
+        return f"RightSplitBlockAVLSet({{{','.join(map(str, self))}}})"

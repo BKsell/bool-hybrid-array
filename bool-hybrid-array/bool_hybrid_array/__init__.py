@@ -6,7 +6,7 @@ except:from . import core
 from .core import __builtins__,builtins
 try:from . import int_array,float_array
 except:pass
-__version__ = "9.11.16"
+__version__ = "9.11.20"
 public_objects = []
 for name in dir(core):
     if not name.startswith("_"):
@@ -24,6 +24,7 @@ try:
     sys.modules[__name__+'.core'] = ProtectedBuiltinsDict(core.__dict__,name = f'{__name__}.core')
     __dict__ = ProtectedBuiltinsDict(globals())
     sys.modules[__name__+'.int_array'] = ProtectedBuiltinsDict(int_array.__dict__,name = __name__+'.int_array')
+    sys.modules[__name__+'.float_array'] = ProtectedBuiltinsDict(float_array.__dict__,name = __name__+'.float_array')
     core.__dict__ = ProtectedBuiltinsDict(core.__dict__)
 except:
     pass

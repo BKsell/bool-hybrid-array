@@ -3,16 +3,17 @@ from collections.abc import Sequence
 from ..int_array import IntHybridArray
 from ..core import BHA_Iterator
 import operator,math,itertools
-class BHA_Float:
-    def __init__(self, data: int | str | float | BHA_Float | tuple):
+class BHA_Float(float):
+    def __new__(cls, data: int | str | float | BHA_Float | tuple):
+        self = super().__new__(cls)
         if isinstance(data, tuple):
             self.a,self.b,self.length = data
-            return
+            return self
         if isinstance(data, BHA_Float):
             self.a = data.a
             self.b = data.b
             self.length = data.length
-            return
+            return self
         if isinstance(data, int):
             data = float(data)
         if isinstance(data, float):
@@ -21,6 +22,7 @@ class BHA_Float:
         b = b.rstrip('0')
         self.length = len(b) if b else 1
         self.a, self.b = int(a) if a else 0, int(b) if b else 0
+        return self
 
     def _align_decimal(self, other):
         max_len = max(self.length, other.length)
@@ -61,7 +63,12 @@ class BHA_Float:
         integer_part = string[:-total_decimal]
         decimal_part = string[-total_decimal:]
         return BHA_Float(f"{integer_part}.{decimal_part}")
-
+    def __format__(self,length):
+        if length == '':return str(self)
+        if length == '!r':return repr(self)
+        length = int(length[1:].split('f')[0].split('d')[0])
+        if length > self.length:return str(self).ljust(length, '0')
+        else:return str(round(self,length))
     def __truediv__(self, other, total_decimal = 22):
         other = BHA_Float(other)
         self_num = self.a * (10 ** self.length) + self.b
@@ -128,8 +135,25 @@ class BHA_Float:
     def __gt__(self,other):
         a, b, _ = self._align_decimal(other)
         return a>b
-    def __round__(self,n = None):
-        return round(float(self),n)
+    def __round__(self, n=None):
+        tmp = BHA_Float(self)
+        if n is None or n == 0:
+            tmp.b = 0
+            tmp.length = 1
+            half = 5 * 10 ** (self.length - 1)
+            if self.a >= 0:
+                if self.b >= half:
+                    tmp.a = self.a + 1
+            else:
+                if self.b >= half:
+                    tmp.a = self.a - 1
+            return tmp
+        tmp.b = (self.b + 5 * 10 **(self.length - n - 1))//10**(self.length - n)
+        tmp.length = n
+        if tmp.b >= 10 ** n:
+            tmp.a += 1
+            tmp.b -= 10 ** n
+        return tmp
     __rmod__ = lambda self,other:BHA_Float(other)%self
     __rfloordiv__ = lambda self,other:BHA_Float(other)//self
     __rpow__ = lambda self,other,m=None:pow(BHA_Float(other),self,m)

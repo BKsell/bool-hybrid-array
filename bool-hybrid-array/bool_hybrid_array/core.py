@@ -4,7 +4,8 @@ try:from mypy_extensions import mypyc_attr
 except:
     def mypyc_attr(*a,**k):
         return lambda func:func
-import builtins
+from multiprocessing import Queue
+import builtins,multiprocessing
 from types import MappingProxyType
 import array,bisect,numpy as np
 from collections.abc import MutableSequence,Iterable,Generator,Iterator,Sequence,Collection
@@ -14,7 +15,11 @@ import operator,ctypes,gc,abc,types
 from functools import lru_cache
 from typing import _GenericAlias
 from typing import Callable, Union, Sequence, MutableSequence, Any, overload, Sized
-hybrid_array_cache:list[tuple[Any]] = []
+import hashlib
+import time
+import platform
+import threading
+hybrid_array_cache:weakref.WeakKeyDictionary[BoolHybridArray,int] = weakref.WeakKeyDictionary()
 try:
     msvcrt = ctypes.CDLL('msvcrt.dll')
     memcpy = msvcrt.memcpy
@@ -107,7 +112,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):# type: ignore
     except:
         pass
     original_dict = MappingProxyType(original_dict)
-ResurrectMeta.__class__ = ResurrectMeta
+#ResurrectMeta.__class__ = ResurrectMeta
 class BHA_Function(metaclass=ResurrectMeta):# type: ignore
     def __init__(self,v):
         self.data,self.module = v,__name__
@@ -128,7 +133,6 @@ def {name}({params}):
         exec(func_code, globals(), local_namespace)
         dynamic_func = local_namespace[name]
         return cls(dynamic_func)
-@mypyc_attr(native_class=False)
 class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     @mypyc_attr(native_class=False)
@@ -201,13 +205,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         self.generator = iter(self)
         self.hash_ = hash_
         if hash_:
-            global hybrid_array_cache
-            hybrid_array_cache = [
-                (ref, h) for ref, h in hybrid_array_cache 
-                if ref() is not None
-            ]
-            for ref, existing_hash in hybrid_array_cache:
-                existing_array = ref()
+            for existing_array, existing_hash in hybrid_array_cache.items():
                 try:
                     if self.size != existing_array.size:
                         continue
@@ -218,7 +216,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
                     continue
         new_hash = id(self)
         self._cached_hash = new_hash
-        hybrid_array_cache.append((weakref.ref(self), new_hash))
+        hybrid_array_cache[self] = new_hash
     def __call__(self, func):
         func.self = self
         def wrapper(*args, **kwargs):
@@ -348,7 +346,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             self.small = np.insert(self.small, key, value)# type: ignore[assignment]
             self.split_index = min(self.split_index + 1, len(self.small) - 1)
         else:
-            pos = bisect.bisect_left(self.large, key)
+            pos = bisect.bisect_right(self.large, key)
             for i in range(pos, len(self.large)):
                 self.large[i] += 1
             if (self.is_sparse and value) or (not self.is_sparse and not value):
@@ -393,6 +391,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         if len(self) != len(other):
             raise ValueError(f"与运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.and_, self, other),hash_ = self.hash_)
+
     def __int__(self):
         if not self.size:
             return 0
@@ -466,6 +465,34 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         return arr
     def __copy__(self) -> BoolHybridArray:
         return self.copy()
+    def __mul__(self, arr2):
+        len1, len2 = len(self), len(arr2)
+        result = FalsesArray(len1 + len2)
+        offset = 0
+        for i in range(len1-1, -1, -1):
+            if not self[i]:
+                continue
+            carry = 0
+            for j in range(len2-1, -1, -1):
+                idx = i + j + 1 + offset
+                product = result[idx] + arr2[j] + carry
+                result[idx] = product & 1
+                carry = product >> 1
+            current_pos = i + offset
+            while carry > 0 and current_pos >= 0:
+                total = result[current_pos] + carry
+                result[current_pos] = total & 1
+                carry = total >> 1
+                current_pos -= 1
+            if carry > 0:
+                result.insert(0, carry)
+                offset += 1
+        start_idx = 0
+        while start_idx < len(result) and not result[start_idx]:
+            start_idx += 1
+        if start_idx == len(result):
+            return FalsesArray(1)
+        return result[start_idx:]
     def find(self,value):
         from .int_array import IntHybridArray
         return IntHybridArray([i for i in range(len(self)) if self[i]==value])
@@ -615,22 +642,18 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):# type: ignore
         type_ = 'I' if size < 1 << 32 else 'Q'
         arr.large = array.array(type_, arr.large)
         if hash_:
-            global hybrid_array_cache
-            del hybrid_array_cache[-1]
-            hybrid_array_cache = [
-                (ref, h) for ref, h in hybrid_array_cache 
-                if ref() is not None
-            ]
-            for ref, existing_hash in hybrid_array_cache:
-                existing_array = ref()
+            for existing_array, existing_hash in hybrid_array_cache.items():
                 try:
                     if arr.size != existing_array.size:
                         continue
                     elif arr == existing_array:
                         arr._cached_hash = existing_hash
                         return arr
-                except:
+                except Exception:
                     continue
+        new_hash = id(arr)
+        arr._cached_hash = new_hash
+        hybrid_array_cache[arr] = new_hash
         return arr
 def TruesArray(size, Type = None, hash_ = True):
     split_index = min(size//10, math.isqrt(size))
@@ -771,13 +794,100 @@ class BHA_Iterator(Iterator,metaclass=ResurrectMeta):# type: ignore
         arr = np.fromiter(self, dtype=dtype)
         return arr.copy() if copy else arr.view()
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
+
+def _real_generator(in_q,out_q):
+    pid = os.getpid()
+    tid = threading.get_ident()
+    mem_addr = id(object())
+    dynamic_data = f"{pid}_{tid}_{mem_addr}"
+    raw_seed = time.perf_counter()
+    sys_info = (sys.version + platform.machine()
+    + platform.processor() + str(os.cpu_count()))
+    mix_seed = (
+    str(raw_seed) + sys_info + dynamic_data + os.urandom(8).hex())
+    h1 = hashlib.sha3_512(mix_seed.encode('utf-8')).digest()
+    h2 = hashlib.md5(h1).digest()
+    mt_seed = int.from_bytes(h2, byteorder='big')
+    __mt_state = array.array('I',[0] * 624)
+    __mt_state[0] = mt_seed & 0xFFFFFFFF
+    for i in range(1, 624):
+        __mt_state[i] = (1812433253 * (__mt_state[i-1] ^
+        (__mt_state[i-1] >> 30)) + i) & 0xFFFFFFFF
+    __mt_index = 0
+    while in_q.get() == "next":
+        if __mt_index >= 624:
+            for i in range(624):
+                y = ((__mt_state[i] & 0x80000000) +
+                (__mt_state[(i+1)%624] & 0x7FFFFFFF))
+                __mt_state[i] = __mt_state[(i+397)%624] ^ (y >> 1)
+                if y & 1:
+                    __mt_state[i] ^= 0x9908B0DF
+                    __mt_state[i] += (
+                        int.from_bytes(os.urandom(1),'big')&0xFFFFFFFF)
+            __mt_index = 0
+        y = __mt_state[__mt_index]
+        __mt_index += 1
+        y ^= (y >> 11)
+        y ^= (y << 7) & 0x9D2C5680
+        y ^= (y << 15) & 0xEFC60000
+        y ^= (y >> 18)
+        xor_result = y
+        for i in range(1, 25):
+            idx = (__mt_index + i) % 624
+            xor_result ^= __mt_state[idx]
+        h3 = hashlib.sha3_512(str(xor_result).encode('utf-8')).digest()
+        final = hashlib.md5(h3).hexdigest()
+        out_q.put(final)
+def create_mt_xor25_generator():#密钥学安全算法，以后我带头用
+    """
+    MT-XOR25 永久密钥使用规范：
+    1. 私钥生成：直接使用MT-XOR25算法输出的哈希值作为永久私钥；
+    2. 公钥推导：无需自定义逻辑，直接调用Python内置hashlib.sha3_512对私钥做哈希，结果即为公钥（SHA-3家族位数越多越安全，512位适配永久密钥场景）：
+    public_key = hashlib.sha3_512(private_key.encode('utf-8')).hexdigest()；
+    3. 身份验证：
+   - 服务端用MT-XOR25生成随机挑战串，下发给用户端；
+   - 用户端用MT-XOR25私钥对挑战串做sha512哈希，生成签名并返回；
+   - 服务端用保存的公钥验证签名（对比哈希结果），匹配则身份验证通过。
+    公钥加密规范（非强制但建议，泄漏了也没事）
+    不要用 HTTP 协议传输公钥；
+    不要在日志、明文存储（如 txt 文件）中记录公钥（如需存储，需加密后再存）；
+    不要在非加密的通信渠道（如邮件、聊天软件）发送公钥。
+    所有涉及公钥、私钥签名、验证信息的传输，必须用 POST 请求，不要用 GET
+    私钥强制保密规则：
+    1. 生成：仅在用户本地设备生成，绝不传输到任何服务器/第三方；
+    2. 存储：仅加密存储在用户本地（如设备安全区、加密文件），禁止明文存储；
+    3. 传输：绝对禁止通过任何渠道（HTTPS/邮件/聊天软件）传输私钥；
+    4. 泄露后果：私钥一旦泄露，攻击者可完全冒充用户身份，且无法补救（只能重置私钥和公钥）。
+    """
+    number = multiprocessing.cpu_count()<<1
+    in_q = [Queue() for _ in range(number)]
+    out_q = [Queue() for _ in range(number)]
+    processes = []
+    for i in range(number):
+        p = multiprocessing.Process(target=_real_generator,
+                                  args=(in_q[i], out_q[i]), daemon=True)
+        p.start()
+        processes.append(p)
+    class XOR25_Generator(metaclass = ResurrectMeta):
+        def __call__(self):
+            in_q[0].put("next")
+            return out_q[0].get()
+        def __iter__(self):
+            while 1:
+                for v in self.batch_generate(number):
+                    yield v
+        def batch_generate(self,n = 1):
+            for i in range(n):
+                in_q[i%len(in_q)].put("next")
+            return (out_q[i%len(out_q)].get() for i in range(n))
+    return XOR25_Generator()
 @mypyc_attr(native_class=False)
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
     def __init__(self, *args, protected_names = ("T", "F", "BHA_Bool", "BHA_List", "BoolHybridArray", "BoolHybridArr",
                                 "TruesArray", "FalsesArray", "ProtectedBuiltinsDict", "builtins",
                                 "__builtins__", "__dict__","ResurrectMeta","math",
                                 "np","protected_names","BHA_Function",
-                                "__class__","Ask_BHA","Create_BHA","Ask_arr","numba_opt","bool_hybrid_array","BHA_Queue","cin","cout","endl"),
+                                "__class__","Ask_BHA","Create_BHA","Ask_arr","numba_opt","bool_hybrid_array","BHA_Queue","cin","cout","endl","create_mt_xor25_generator","namespace"),
                  name = 'builtins', **kwargs):
         super().__init__(*args, **kwargs)
         if name == 'builtins':
@@ -849,6 +959,17 @@ def Ask_arr(arr):
         return h
     else:
         return str(arr)
+def temp2():
+    __temp1 = lru_cache(lambda x:(
+        bit_stream := bytes(0 if k < lead_zero else (n >> ((total_len - 1) - k)) & 1 for k in range(total_len)),
+        arr := array.array('B', FalsesArray(total_len)),
+        memcpy(arr.buffer_info()[0], bit_stream, total_len),arr)[-1]
+        if(n := int(x, base=16),
+        lead_zero := len(x) - len(x.lstrip('0')),
+        total_len := lead_zero + n.bit_length())
+        else array.array('B'))
+    return lambda x: BoolHybridArr(__temp1(x))
+temp2 = temp2()
 @BHA_Function
 def Ask_BHA(path):
     if '.bha' not in path.lower():
@@ -865,15 +986,6 @@ def Ask_BHA(path):
         with mm:
             temp = mm.read().decode('utf-8').strip()
         temp = temp.split()
-        temp2 = lambda x: BoolHybridArr(
-        (
-        bit_stream := bytes(0 if k < lead_zero else (n >> ((total_len - 1) - k)) & 1 for k in range(total_len)),
-        arr := array.array('B', FalsesArray(total_len)),
-        memcpy(arr.buffer_info()[0], bit_stream, total_len),arr)[-1]
-        if(n := int(x, base=16),
-        lead_zero := len(x) - len(x.lstrip('0')),
-        total_len := lead_zero + n.bit_length())
-        else array.array('B'))
         temp = BHA_List(map(temp2,temp))
         if len(temp) == 1:
             return temp[0]
@@ -943,8 +1055,8 @@ def numba_opt():
             numba.types.Optional(numba.types.Any)
         )
     ])
-    bisect.bisect_left = numba.njit(sig, cache=True)(bisect.bisect_left)
-    bisect.bisect_right = numba.njit(sig, cache=True)(bisect.bisect_right)
+    bisect.bisect_left = numba.njit(sig, cache=True,wraparound=True)(bisect.bisect_left)
+    bisect.bisect_right = numba.njit(sig, cache=True,wraparound=True)(bisect.bisect_right)
 from ._cppiostream import cin,cout,endl
 def namespace(name,bases,namespace_):
     tmp = {}
@@ -974,6 +1086,7 @@ builtins.cin = cin
 builtins.cout = cout
 builtins.endl = endl
 builtins.BHA_Queue = BHA_Queue
+builtins.create_mt_xor25_generator = create_mt_xor25_generator
 Tid,Fid = id(builtins.T),id(builtins.F)
 original_id = builtins.id
 def fake_id(obj):

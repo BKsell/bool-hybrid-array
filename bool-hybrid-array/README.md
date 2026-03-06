@@ -38,15 +38,15 @@ pip install -U bool-hybrid-array
 
 ## 核心特性
 
-* **智能存储模式**：数据量小的位置使用密集存储numpy.ndarray数组，
+* ✅**智能存储模式**：数据量小的位置使用密集存储numpy.ndarray数组，
 * 数据量大的位置为稀疏存储array.array稀疏数组
-* 非稀疏模式：数据大部分为非0（True）索引
-* 稀疏模式：数据大部分为0（False）索引
-* BoolHybridArr函数会自动切换
-* **内存高效**：稀疏数据场景下比普通列表节省50%-80%内存
-* **操作便捷**：支持类似列表的索引、切片和赋值操作
-* **快速统计**：内置高效的计数和布尔判断方法
-* **速度优势**：修改元素的时间还不比list慢
+* ✅非稀疏模式：数据大部分为非0（True）索引，稀疏区异常值为False
+* ✅稀疏模式：数据大部分为0（False）索引，稀疏区异常值为True
+* ✅BoolHybridArr函数会自动切换
+* ✅**内存高效**：稀疏数据场景下比普通列表节省50%-80%内存
+* ✅**操作便捷**：支持类似列表的索引、切片和赋值操作
+* ✅**快速统计**：内置高效的计数和布尔判断方法
+* ✅**速度优势**：修改元素的时间还不比list慢
 
 ## 快速开始
 
@@ -436,6 +436,27 @@ class MathTools(BaseMathTools,metaclass = namespace):
     protected_names = (*BaseMathTools.protected_names,"e","sub","mul")
 
 print(MathTools.mul(10,23))#输出：230
+
+
+#布尔数组乘法（9.11.20版本新增）
+
+# 定义两个超大二进制数（用BoolHybridArray存储）
+
+# 二进制 1101（十进制13）
+
+arr1 = BoolHybridArr([1,0,1,1])
+
+# 二进制 1011（十进制11）
+
+arr2 = BoolHybridArr([1,1,0,1])
+
+# 直接相乘！
+
+result = arr1 * arr2
+
+print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 十进制143（13×11=143）
+
+
 ```
 
 ## 性能优势
@@ -614,7 +635,10 @@ print(MathTools.mul(10,23))#输出：230
 * **9.11.14**：新增BoolHybridArray数组的大小比较
 * **9.11.15**：新增float_array子包和namespace元类
 * **9.11.16**：修复SyntaxError错误
-
+* **9.11.17**：优化IntHybridArray的sort方法
+* **9.11.18**：修复TypeError的错误
+* **9.11.19**：修复Cython优化
+* **9.11.20**：新增布尔数组乘法
 
 
 
@@ -634,11 +658,21 @@ print(MathTools.mul(10,23))#输出：230
 - Q：为什么使用在Windows终端使用PyPy时建议先调用`chcp 65001`再启动PyPy？
 * A：因为本库有很多的的中文报错和打印，项目里也可能会有。Windows终端里的PyPy默认是GBK编码，有中文时会乱码。chcp 65001可以切换到UTF-8编码，防止乱码。
 
+### bool-hybrid-array
+🔥 全网下载86K+，但GitHub星标=0的「神秘Python包」🔥
+
+#### 为啥这么多人下载还没人来GitHub？
+我也不知道😭 可能大家下载完就把我忘了，求各位大佬来看看孩子吧！
+
+#### 今日目标
+📌 星标破50：出详细教程+性能对比视频
+📌 星标破100：直播在线改bug（你提我改，绝不耍赖）
 
 
 ## 源代码和原理
 
 请见[来看看我自己的布尔数组吧！](https://code.xdf.cn/freecode/editor?no=80cd07aa023fb2448069e6d8dd50bb5d&type=2&org=code)
+或[Github仓库](https://github.com/BKsell/bool-hybrid-array.git)
 
 ## 许可证
 
