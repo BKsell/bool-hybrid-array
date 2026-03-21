@@ -88,6 +88,11 @@ print(arr3)  # 输出:  BoolHybridArr([False, False, False])；
 英文版：[bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
 中文版：[1083175506-bool-hybrid-array](https://www.github-zh.com/projects/1083175506-bool-hybrid-array)
 
+#Gitee仓库
+
+[bool-hybrid-array.git](https://gitee.com/BKsell/bool-hybrid-array.git)
+
+
 # 修改元素
 
 ```python
@@ -659,7 +664,7 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * A：因为本库有很多的的中文报错和打印，项目里也可能会有。Windows终端里的PyPy默认是GBK编码，有中文时会乱码。chcp 65001可以切换到UTF-8编码，防止乱码。
 
 ### bool-hybrid-array
-🔥 全网下载86K+，但GitHub星标=0的「神秘Python包」🔥
+🔥 全网下载100+K+，但GitHub星标=0的「神秘Python包」🔥
 
 #### 为啥这么多人下载还没人来GitHub？
 我也不知道😭 可能大家下载完就把我忘了，求各位大佬来看看孩子吧！
