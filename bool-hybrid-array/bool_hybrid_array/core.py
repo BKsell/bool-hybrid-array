@@ -838,11 +838,11 @@ def _real_generator(in_q,out_q):
         h3 = hashlib.sha3_512(str(xor_result).encode('utf-8')).digest()
         final = hashlib.md5(h3).hexdigest()
         out_q.put(final)
-def create_mt_xor25_generator():#密钥学安全算法，以后我带头用
+def create_mt_xor25_generator():
     """
     MT-XOR25 永久密钥使用规范：
     1. 私钥生成：直接使用MT-XOR25算法输出的哈希值作为永久私钥；
-    2. 公钥推导：无需自定义逻辑，直接调用Python内置hashlib.sha3_512对私钥做哈希，结果即为公钥（SHA-3家族位数越多越安全，512位适配永久密钥场景）：
+    2. 公钥推导：无需自定义逻辑，直接调用Python内置hashlib.sha3_512对私钥做哈希，结果即为公钥（SHA-2家族位数越多越安全，512位适配永久密钥场景）：
     public_key = hashlib.sha3_512(private_key.encode('utf-8')).hexdigest()；
     3. 身份验证：
    - 服务端用MT-XOR25生成随机挑战串，下发给用户端；
@@ -856,30 +856,39 @@ def create_mt_xor25_generator():#密钥学安全算法，以后我带头用
     私钥强制保密规则：
     1. 生成：仅在用户本地设备生成，绝不传输到任何服务器/第三方；
     2. 存储：仅加密存储在用户本地（如设备安全区、加密文件），禁止明文存储；
-    3. 传输：绝对禁止通过任何渠道（HTTPS/邮件/聊天软件）传输私钥；
+    3. 传输：绝对禁止通过任何渠道（HTTP/邮件/聊天软件）传输私钥；
     4. 泄露后果：私钥一旦泄露，攻击者可完全冒充用户身份，且无法补救（只能重置私钥和公钥）。
     """
-    number = multiprocessing.cpu_count()<<1
+    number = multiprocessing.cpu_count() << 1
     in_q = [Queue() for _ in range(number)]
-    out_q = [Queue() for _ in range(number)]
+    out_q = Queue()
     processes = []
     for i in range(number):
         p = multiprocessing.Process(target=_real_generator,
-                                  args=(in_q[i], out_q[i]), daemon=True)
+                                  args=(in_q[i], out_q), daemon=True)
         p.start()
         processes.append(p)
-    class XOR25_Generator(metaclass = ResurrectMeta):
+    class XOR25_Generator():
         def __call__(self):
             in_q[0].put("next")
-            return out_q[0].get()
+            return out_q.get()
         def __iter__(self):
             while 1:
-                for v in self.batch_generate(number):
-                    yield v
+                yield from self.batch_generate(1000)
+        def __next__(self):
+            return self()
         def batch_generate(self,n = 1):
             for i in range(n):
                 in_q[i%len(in_q)].put("next")
-            return (out_q[i%len(out_q)].get() for i in range(n))
+            for i in range(n):
+                yield out_q.get()
+        def randrange(self,start,end):
+            n = sum(map(lambda x:int(x,base = 16),self.batch_generate(
+                end//(1<<128)+1)))
+            return start + (n % (end - start))
+        randint = lambda self,s,e:self.randrange(s,e+1)
+        def unifrom(self,start,end,bperv = 32):
+            return self.randint(start << bperv,end << bperv)/1 << bperv
     return XOR25_Generator()
 @mypyc_attr(native_class=False)
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
