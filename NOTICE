@@ -1,0 +1,54 @@
+NOTICE
+BoolHybridArray (bool-hybrid-array)
+Author: 蔡靖杰
+Contact: 1289270215@qq.com
+Project Repository:
+- GitHub: https://github.com/BKsell/bool-hybrid-array
+- Gitee: shturl.cc/lrS703fwvD74PcYVmthkG5gxMxPrx8lhaYgU
+- GitHub Chinese Mirror: https://www.github-zh.com/projects/1083175506-bool-hybrid-array
+
+1. Core License Statement
+The software core license is the standard MIT License, located in the LICENSE file.
+All rights to use, copy, modify, distribute, sublicense and sell this software are governed solely by the MIT License text, without any modification to the original MIT license terms. This NOTICE file is a legally binding supplementary agreement attached to the MIT License and does not replace or alter the MIT License.
+Any person who acquires this software package containing both LICENSE and NOTICE acknowledges full reading, understanding and unconditional acceptance of all supplementary terms in this NOTICE, and such supplementary terms shall be legally binding on the recipient permanently.
+By acquiring this software package, Recipient irrevocably grants to the copyright holder a worldwide, royalty-free, non-exclusive patent license to make, use, modify, distribute all technical solutions covered by Recipient’s patents that relate to the algorithms, storage structures and logic of this software.
+If Recipient (including any downstream user who obtained the software via redistribution) asserts any patent right against the copyright holder, such implied cross-patent license shall serve as full legal defense to all patent infringement claims filed by Recipient.
+
+2. Mandatory Retention Rule for This NOTICE File
+Any individual, enterprise, organization or other entity (hereinafter "Recipient") that obtains, copies, modifies, distributes, sublicenses or sells copies of this software shall comply with the following mandatory rule without exception:
+When distributing any copy, source code, binary package, derivative work, customized variant or embedded integration product of this software, the complete, unmodified, full-text original content of this NOTICE file must be placed in the root directory of all distribution packages, archives, installation bundles and source releases.
+Recipient is strictly prohibited from deleting, renaming, blanking out, editing, truncating, hiding, encrypting, compressing to obscure, splitting or partially removing any content of this NOTICE file during redistribution, secondary packaging, open-source forking, commercial delivery or internal transmission to third parties.
+Every Recipient shall fully transmit all binding supplementary terms in this NOTICE to every downstream recipient, and must deliver a complete unaltered copy of this NOTICE to all downstream parties without omission.
+If any downstream party violates the retention rule or patent clause set forth herein due to the Recipient’s failure to deliver or enforce this NOTICE, the original distributing Recipient shall bear full joint and several liability for all copyright damages, litigation costs, attorney fees and compensation losses suffered by the copyright holder.
+If Recipient fails to retain the complete unaltered NOTICE file as required, all rights and licenses granted to the Recipient under the MIT License shall terminate automatically and immediately with retroactive effect from the date the Recipient first obtained the software.
+Upon license termination, the Recipient must immediately and permanently cease all use, modification, copying, distribution, deployment, sale, commercial licensing, internal operation and embedded integration of the software and all its derivative works, fully erase and permanently destroy all electronic, physical and archived copies of the software in its possession, custody or control within 7 calendar days, and provide written confirmation of full destruction to the copyright holder upon request.
+The liability for deletion or tampering of NOTICE rests solely and entirely on the Recipient who performed the distribution action; the lack of NOTICE in downstream distributed copies shall not serve as any defense or exemption to the Recipient’s breach of agreement.
+
+3. Supplementary Patent Restriction Notice
+All patent retaliation restrictions herein shall be passed down to all downstream users via complete NOTICE delivery. All redistributors must explicitly inform every downstream party of the patent license termination rule. Failure to notify downstream users shall not exempt the redistributor from joint liability for any downstream patent litigation against the copyright holder.
+If the Recipient initiates, participates in, funds or supports any patent infringement litigation, arbitration, administrative complaint, cease-and-desist demand or compensation claim against the copyright holder, its affiliates, related projects or copyright holder’s upstream/downstream partners, related to any algorithm, storage structure, memory layout, bit operation logic, data encoding mode, core function, architectural design and all technical solutions contained in this software, all rights and licenses granted to the Recipient under the MIT License shall automatically terminate immediately upon the filing, submission or initiation of such patent-related claims, with retroactive invalidation of all prior authorization.
+After the license terminates, the Recipient must immediately and permanently stop all behaviors including but not limited to using, modifying, copying, distributing, deploying, selling, licensing, embedding, commercializing the software and its derivative works, and shall completely delete and destroy all copies of the software in its possession, custody or control within 7 calendar days.
+The Recipient shall bear all legal costs, attorney fees, compensation damages and losses incurred by the copyright holder due to such patent litigation initiated by the Recipient.
+
+4. Supported Runtime & Environment
+- Python Version: 3.8 and above
+- Supported Interpreters: CPython, PyPy
+- Mandatory Dependency: numpy >= 1.19.0
+- Optional Dependencies:
+  1. numba_opt: numba >= 0.55.0
+  2. cython_opt: cython >= 3.2.4
+  3. cycy opt: cycy-runtime >= 0.2.5
+- Compilation Support: Cython
+
+5. Attached Files Included in Distribution
+README.md, LICENSE, NOTICE, temp.py, temp.cmd, BHA_Opener.7z
+All source files, C intermediate files, compiled pyd binaries, cache files and subdirectory code under bool_hybrid_array/int_array, bool_hybrid_array/float_array are covered by the MIT License and this supplementary NOTICE agreement.
+
+6. Conflict Priority
+If any content of this NOTICE conflicts with the original MIT License text, the MIT License text shall prevail.
+The invalidity of any single clause in this NOTICE shall not affect the legal validity and enforceability of all remaining clauses.
+
+7. Global Retroactive Public Statement (Fourth Layer Protection)
+All versions of this software, including historical releases, git snapshots, early versions without this NOTICE file, are subject to the overall patent mutual restraint rule publicly announced by the copyright holder on the project homepage, repository homepage and PyPI project page. Any party that downloads, uses, copies or distributes any historical version of this software shall be deemed to have received full notice of the cross-patent license and patent retaliation clauses set forth in this NOTICE from the long-term public global announcement of the project.
+The absence of this NOTICE file in historical old versions shall not constitute a valid defense to evade the cross-patent license obligation and patent litigation penalty rules. The copyright holder’s long-term continuous public disclosure of the above supplementary terms shall be used as complete valid evidence against all users of any historical version in any legal procedure.
+Any Recipient who files patent litigation against the copyright holder based solely on historical versions without NOTICE shall still be subject to the cross-patent license obligation stipulated in this NOTICE due to the long-term continuous public disclosure of the supplementary terms on the project official channel. Such litigation shall constitute a breach of the implied patent mutual agreement, and the copyright holder reserves the right to counterclaim all litigation costs, attorney fees and compensation losses arising therefrom.

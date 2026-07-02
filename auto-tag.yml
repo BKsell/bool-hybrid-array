@@ -1,0 +1,57 @@
+name: Auto Create Tag & Release
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  get-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      # 关键：运行python读取setup.py的version，精准提取
+      - name: Parse version from setup.py
+        id: parse_ver
+        run: |
+          python -c "
+          import setuptools
+          import sys
+          sys.argv = ['setup.py', '--version']
+          setuptools.setup()
+          " > ver.txt
+          VER=$(cat ver.txt | tail -1)
+          echo "VERSION=$VER" >> $GITHUB_ENV
+          echo "TAG_NAME=v$VER" >> $GITHUB_ENV
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git rev-parse "tags/${{ env.TAG_NAME }}" >/dev/null 2>&1; then
+            echo "EXIST=1" >> $GITHUB_ENV
+          else
+            echo "EXIST=0" >> $GITHUB_ENV
+          fi
+
+      - name: Create & push git tag
+        if: env.EXIST == '0'
+        run: |
+          git config --global user.name "Actions Bot"
+          git config --global user.email "actions@github.com"
+          git tag -a ${{ env.TAG_NAME }} -m "Release ${{ env.VERSION }}"
+          git push origin ${{ env.TAG_NAME }}
+
+      - name: Auto generate GitHub Release
+        if: env.EXIST == '0'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.VERSION }}
+          generate_release_notes: true

@@ -88,11 +88,6 @@ print(arr3)  # 输出:  BoolHybridArr([False, False, False])；
 英文版：[bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
 中文版：[1083175506-bool-hybrid-array](https://www.github-zh.com/projects/1083175506-bool-hybrid-array)
 
-#Gitee仓库
-
-[bool-hybrid-array.git](https://gitee.com/BKsell/bool-hybrid-array.git)
-
-
 # 修改元素
 
 ```python
@@ -461,6 +456,31 @@ result = arr1 * arr2
 
 print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 十进制143（13×11=143）
 
+#__cin__魔法方法（9.11.21版本新增）
+
+import ctypes
+
+class point:
+    __slots__ = ("x", "y")
+    def __init__(x = 0,y = 0):
+        self.x,self.y = ctypes.c_int(x),ctypes.c_int(y)
+    def __cin__(self):
+        cin >> self.x >> self.y
+
+point = point(0,0)
+
+cin >> point #输入：20 13
+
+cout << point.x << ' ' << point.y #输出：20 13
+
+#BHA_string（9.11.21版本新增）
+
+string = BHA_string('')
+
+cin >> string#输入：bool-hybrid-array is efficient boolean array
+
+cout << string#输出：bool-hybrid-array is efficient boolean array
+
 
 ```
 
@@ -486,7 +506,7 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **7.10.4**：修正样例代码中的错误，增加index/rindex的空数组处理
 * **7.10.5**：修复7.10.4版本index/rindex中size没加self的错误
 * **7.10.6**：比7.10.0进一步优化内部储存
-* **7.10.7**：新增arr.memory·_usage方法查看是否优化，支持查看内存占用详情及优化建议，配合arr.optimize()实现存储自动调优
+* **7.10.7**：新增arr.memory_usage方法查看是否优化，支持查看内存占用详情及优化建议，配合arr.optimize()实现存储自动调优
 * **7.10.8**：增加cython加速
 * **7.10.9**：修复之前所有版本的导入问题
 * **7.10.10**：修复unit8溢出问题
@@ -495,7 +515,7 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **7.10.13**：尝试修复memory_usage方法的错误×3
 * **7.10.14**：尝试修复unit8溢出问题×2
 * **7.10.15**：尝试修复unit8溢出问题×3
-* **7.10.16**：修复unit8溢出问题×4+尝试修复memory\_usage方法的错误×4
+* **7.10.16**：修复unit8溢出问题×4+尝试修复memory_usage方法的错误×4
 * **7.10.17**：尝试修复memory_usage方法的错误×4
 * **7.10.18**：尝试修复memory_usage方法的错误×5
 * **7.10.19**：尝试修复memory_usage方法的错误×6
@@ -509,7 +529,7 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **7.13.4**：优化左移
 * **7.13.5**：优化sqrt
 * **7.13.6**：修复7.13.5版本的SyntaxError
-* **7.13.7**：优化__int__方法
+* **7.13.7**：优化`__int__`方法
 * **7.14.0**：优化密集部分的运算速度
 * **7.14.1**：优化多种位运算方法
 * **7.14.2**：修复7.14.1版本的in的错误
@@ -521,7 +541,7 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **8.0.1**：修复8.0.0兼容numpy数组时没有形状参数的问题
 * **8.0.2**：移除bool_hybrid_dtype，改用object
 * **8.1.0**：利用ctypes加速密集部分的一些方法
-* **8.1.1**：修复8.1.0版本中的“AttributeError: '_CompactBoolArray' object has no attribute 'small'”问题
+* **8.1.1**：修复8.1.0版本中的“`AttributeError: '_CompactBoolArray' object has no attribute 'small'`”问题
 * **8.1.2**：修复8.1.1版本中的“TypeError”
 * **8.1.3**：修复8.1.2版本中的“NameError”问题
 * **8.1.4**：修复8.1.3版本中的“TypeError”问题
@@ -531,7 +551,7 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **8.2.2**：修复8.2.1版本中的IndexError
 - **9.0.0**：详情见上
 * **9.0.1**：小更新，优化optimize方法
-* **9.1.0**：新增二维数组的optimize与memory\_usage，优化二维数组的位运算，给BHA\_Bool新增__rand__、**ror**、__rxor__等等
+* **9.1.0**：新增二维数组的optimize与memory\_usage，优化二维数组的位运算，给BHA_Bool新增`__rand__、__ror__、__rxor__`等等
 * **9.1.1**：修复9.1.0版本中的TypeError: unsupported operand type(s) for +: 'int' and 'method'错误
 * **9.1.2**：修复9.1.1版本中的NameError: name 'equivalent\_numpy\_mem' is not defined错误
 * **9.1.3**：修复9.1.2版本中的NameError: name 'need\_optimize' is not defined错误
@@ -545,11 +565,11 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **9.4.5**：修复9.4.0~9.4.4数组索引访问重点TypeError: 'NoneType' object is not subscriptable
 * **9.4.6**：让切片、位运算的哈希复用状态和self一致
 * **9.5.0**：新增ResurrectMeta元类
-* **9.5.1**：修复9.5.0版本中的ResurrectMeta的实例__repr__无限递归问题
-* **9.5.2**：修复9.5.1版本中的ResurrectMeta的实例__repr__和__str__的无限递归问题
+* **9.5.1**：修复9.5.0版本中的ResurrectMeta的实例`__repr__`无限递归问题
+* **9.5.2**：修复9.5.1版本中的ResurrectMeta的实例`__repr__`和`__str__`的无限递归问题
 * **9.6.0**：新增用装饰器给实例添加动态方法的功能
 * **9.6.1**：修复9.6.0中的参数传递问题
-* **9.6.2**：可以使用BHA\_Iterator
+* **9.6.2**：可以使用BHA_Iterator
 * **9.6.3**：修复常变量删除拦截的逻辑错误
 * **9.6.4**：把常变量删除拦截的逻辑变得更可读
 * **9.6.5**：修复TabError错误
@@ -558,7 +578,7 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **9.6.8**：修复常变量删除拦截的逻辑错误
 * **9.6.9**：修复9.6.8中的SyntaxError错误
 * **9.6.10**：修复9.6.9版本中的AttributeError错误
-* **9.6.11**：修复9.6.10版本中的AttributeError: 'dict' object has no attribute '**dict**'. Did you mean: '**dir**'?错误
+* **9.6.11**：修复9.6.10版本中的AttributeError: 'dict' object has no attribute '__dict__'. Did you mean: '__dir__'?错误
 * **9.6.12**：修复AttributeError错误
 * **9.6.13**：修复常变量删除拦截的逻辑错误
 * **9.6.14**：修复常变量删除拦截的逻辑错误×2
@@ -576,7 +596,7 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **9.6.23.post3**：修复bool_hybrid_array.__dict__的防御机制的部分逻辑漏洞
 * **9.6.23.post4**：修复bool_hybrid_array.__dict__的防御机制的部分逻辑漏洞×2
 * **9.6.24**：和9.6.23.post4相同，正式版本发布
-* **9.6.25**：增加了对bool\_hybrid\_array里的类的\_\_dict\_\_的防御机制
+* **9.6.25**：增加了对`bool_hybrid_array`里的类的`__dict__`的防御机制
 * **9.6.25.post1**：修复了“变量名不能以数字开头”的错误
 * **9.6.26**：和9.6.25.post1相同，正式版本发布
 * **9.6.27**：尝试修复T/F相等性判断错误
@@ -586,8 +606,8 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **9.6.29**：解决了密集区numpy的缓存同步问题和拷贝问题
 * **9.6.30**：增加了”测试代码“文件
 * **9.7.0**：增加了view方法
-* **9.7.1**：修复__array__方法部分的错误
-* **9.7.2**：修复9.7.1版本中numpy 2.0对__array__方法参数的警告
+* **9.7.1**：修复`__array__`方法部分的错误
+* **9.7.2**：修复9.7.1版本中numpy 2.0对`__array__`方法参数的警告
 * **9.7.3**：解决np.array(arr)解释器莫名其妙退出的问题
 * **9.8.0**：增加python 3.9以下的版本泛型、联合类型支持
 * **9.8.1**：让python 3.10+版本泛型、联合类型分别为types.UnionType和types.GenericAlias
@@ -613,7 +633,7 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **9.10.14**：修复IntHybridArray中因单个 0 导致所有数字位长被压缩到 1的问题
 * **9.10.15**：修复IntHybridArray变成布尔数组的错误
 * **9.10.16**：新增Python 3.14时的jit优化加速
-* **9.10.17**：给保护字典添加__import__方法，支持from导入
+* **9.10.17**：给保护字典添加`__import__`方法，支持from导入
 * **9.10.18**：新增BoolHybridArray的序列化和反序列化支持
 * **9.10.18.post1**：修复TypeError: cannot pickle 'itertools._tee' object错误
 * **9.10.18.post2**：尝试修复“满屏错误”的问题
@@ -626,8 +646,8 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **9.11.0**：新增对7.3.10以上版本的PyPy解释器的支持
 * **9.11.1**：修复PyPy解释器下的保护机制过度保护bug
 * **9.11.2**：尝试修复IntHybridArray索引修改的错误
-* **9.11.3**：修复NameError: name 'lst' is not defined. Did you mean: 'list'?错误
-* **9.11.4**：修复TypeError: __dict__ must be set to a dictionary, not a 'IntHybridArray'的错误
+* **9.11.3**：修复`NameError: name 'lst' is not defined. Did you mean: 'list'?`错误
+* **9.11.4**：修复`TypeError: __dict__ must be set to a dictionary, not a 'IntHybridArray'`的错误
 * **9.11.5**：新增BHA_Queue双栈实现队列
 * **9.11.6**：修复从9.11.3版本开始cpython用户无法安装bool-hybrid-array包的问题
 * **9.11.7**：修复TypeError: 'map' object is not reversible的错误
@@ -635,7 +655,7 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **9.11.9**：修复BHA_Queue的bug，新增cin和cout（使用方式：a = ctypes.c_int();cin >> a;cout << a，支持各种ctypes类型、numpy标量）
 * **9.11.10**：修复cin的AttributeError的错误
 * **9.11.11**：新增cin对EOF的处理
-* **9.11.12**：优化了IntHybridArray的__setitem__，新增了IntHybridArray的sort
+* **9.11.12**：优化了IntHybridArray的`__setitem__`，新增了IntHybridArray的sort
 * **9.11.13**：修复IndexError的错误
 * **9.11.14**：新增BoolHybridArray数组的大小比较
 * **9.11.15**：新增float_array子包和namespace元类
@@ -644,6 +664,18 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * **9.11.18**：修复TypeError的错误
 * **9.11.19**：修复Cython优化
 * **9.11.20**：新增布尔数组乘法
+* **9.11.21**：新增`__cin__`魔法方法和BHA_string
+* **9.11.22**：修复cout的换行错乱
+* **9.11.23**：修复cout的换行错乱×2
+* **9.11.24**：加速cout的速度
+* **9.11.25**：公开mt_xor25和umfs，修复umfs的digest的错误
+* **9.11.26**：修复mt_xor25的错误
+* **9.11.27**：修复mt_xor25的错误×2
+* **9.11.28**：修复Ask_BHA和Create_BHA的bug
+* **9.11.29**：修复一些已知的问题
+
+
+
 
 
 
@@ -661,10 +693,11 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 * Q：为什么不建议把太大的本类型数组打印？
 * A：虽然BoolHybridArray类型数组省内存，但字符串不省内存，一个`True`要4字节，一个`False`要5字节，连逗号都要占1字节（`numpy.ndarray`：我都比字符串省内存）
 - Q：为什么使用在Windows终端使用PyPy时建议先调用`chcp 65001`再启动PyPy？
-* A：因为本库有很多的的中文报错和打印，项目里也可能会有。Windows终端里的PyPy默认是GBK编码，有中文时会乱码。chcp 65001可以切换到UTF-8编码，防止乱码。
+* A：因为本库有很多的的中文报错和打印，项目里也可能会有。Windows终端里的PyPy默认是GBK编码，有中文时会乱码。chcp 65001可以切换到UTF-8编码，防止乱码。也可以把print换成cout防止乱码
+
 
 ### bool-hybrid-array
-🔥 全网下载100+K+，但GitHub星标=0的「神秘Python包」🔥
+🔥 全网下载86K+，但GitHub星标=0的「神秘Python包」🔥
 
 #### 为啥这么多人下载还没人来GitHub？
 我也不知道😭 可能大家下载完就把我忘了，求各位大佬来看看孩子吧！
@@ -682,4 +715,4 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 ## 许可证
 
 本项目采用**MIT许可证**，详情参见**LICENSE文件**。
-
+补充法律约束详见** NOTICE 文件**。**任何二次分发行为必须完整保留未经修改的 NOTICE 文件；违反该要求将立即终止你依据 MIT 协议获得的全部使用授权。**
