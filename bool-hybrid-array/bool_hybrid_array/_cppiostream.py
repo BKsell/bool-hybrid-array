@@ -215,21 +215,47 @@ class InPutObject:
                     else:
                         val = np.array(self._parse_int(), dtype=target.dtype)
                     target.flat[i] = val[()]
+        elif  hasattr(target,'__cin__'):
+            target.__cin__()
         else:
             raise TypeError(f"Unsupported target type: {type(target)}")
         return self
     __str__ = lambda self:""
     __repr__ = lambda self:""
-    __bool__ = lambda self:not self._buf or self.eofbit
+    __bool__ = lambda self:not self.eofbit
     def clear(self):
         self._buf.clear()
         self.eofbit = False
 class OutPutObject:
+    def __init__(self):
+        self.k32 = None
+        self.h_stdout = c_void_p()
+        if sys.platform == "win32":
+            self.libc = msvcrt
+            self.k32 = CDLL("kernel32.dll", use_last_error=True)
+            self.k32.WriteConsoleW.restype = c_bool
+            self.k32.WriteConsoleW.argtypes = [c_void_p, POINTER(c_wchar), c_uint, POINTER(c_uint32), c_void_p]
+            self.h_stdout = self.k32.GetStdHandle(-11)
+            self.code = "utf-16le"
+        else:
+            libc_path = "libc.so.6" if sys.platform == "linux" else "libSystem.B.dylib"
+            self.libc = CDLL(libc_path)
+            self.code = "utf-8"
+
     def __lshift__(self, data):
-        sys.stdout.write(str(data))
+        buf = str(data).encode(self.code, errors="replace")
+        buf_len = len(buf)
+        if self.k32 is not None:
+            written = c_uint32()
+            char_count = buf_len >> 1
+            wbuf = (c_wchar * char_count).from_buffer_copy(buf)
+            self.k32.WriteConsoleW(self.h_stdout, wbuf, c_uint(char_count), byref(written), None)
+        else:
+            self.libc.write(1, buf, buf_len)
         return self
-    __str__ = lambda self:""
-    __repr__ = lambda self:""
+    __str__ = lambda self: ""
+    __repr__ = lambda self: ""
+
 cin = InPutObject()
 cout = OutPutObject()
 endl = "\r\n"

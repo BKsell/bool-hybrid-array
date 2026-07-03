@@ -592,12 +592,16 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         arr.__dict__ = self.__dict__
         return arr
     def __reduce__(self):
-        return BoolHybridArr,(np.asarray(self),self.is_sparse,self.Type,self.hash_,),
+        return BoolHybridArr,((self.large,self.small,self.split_index,self.is_sparse,self.Type,self.hash_),),
     dequeue = lambda self:self.pop(0)
 @mypyc_attr(native_class=False)
 class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __new__(cls, lst: Iterable = (), is_sparse=None, Type = None, hash_ = True, split_index = None) -> BoolHybridArray:
+        if isinstance(lst,tuple) and isinstance(lst[0],array.array) and isinstance(lst[1],(BoolHybridArray._CompactBoolArray,np.ndarray)):
+            arr = TruesArray(0)
+            arr.large,arr.small,arr.split_index,arr.is_sparse,arr.Type,arr.hash_ = lst
+            return arr
         a = isinstance(lst, (Iterator, Generator, map))
         if a:
             lst, copy1, copy2 = itertools.tee(lst, 3)
@@ -772,7 +776,6 @@ class BHA_List(list,metaclass=ResurrectMeta):# type: ignore
     def to_ascii_art(self, width=20):
         art = '\n'.join([' '.join(['■' if j else ' '  for j in i]) for i in self])
         return art
-@mypyc_attr(native_class=False)
 class BHA_Iterator(Iterator,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __init__(self,data):
@@ -794,7 +797,167 @@ class BHA_Iterator(Iterator,metaclass=ResurrectMeta):# type: ignore
         arr = np.fromiter(self, dtype=dtype)
         return arr.copy() if copy else arr.view()
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
+class BHA_string:
+    def __init__(self, data: str | bytes | bytearray = ""):
+        if isinstance(data, str):
+            self._buf = bytearray(data.encode("utf-8"))
+        elif isinstance(data, (bytes, bytearray)):
+            self._buf = bytearray(data)
+        else:
+            raise TypeError("BHA_string only accept str / bytes / bytearray")
 
+    def __str__(self) -> str:
+        return self._buf.decode("utf-8", errors="replace")
+
+    def __repr__(self) -> str:
+        return f'BHA_string("{str(self)}")'
+
+    def __len__(self) -> int:
+        return len(self._buf)
+
+    def __getitem__(self, idx: int | slice) -> int | bytearray:
+        return self._buf[idx]
+
+    def __setitem__(self, idx: int, val: int):
+        self._buf[idx] = val
+
+    def __contains__(self, sub: str | bytes | bytearray | "BHA_string") -> bool:
+        if isinstance(sub, BHA_string):
+            target = sub._buf
+        elif isinstance(sub, str):
+            target = sub.encode("utf-8")
+        elif isinstance(sub, (bytes, bytearray)):
+            target = sub
+        else:
+            raise TypeError("in support str/bytes/bytearray/BHA_string")
+        return target in self._buf
+
+    def write(self, s: str | bytes | bytearray | "BHA_string") -> int:
+        if isinstance(s, BHA_string):
+            raw = s._buf
+        elif isinstance(s, str):
+            raw = s.encode("utf-8")
+        elif isinstance(s, (bytes, bytearray)):
+            raw = s
+        else:
+            raise TypeError("write supports str/bytes/bytearray/BHA_string")
+        self._buf.extend(raw)
+        return len(raw)
+    def __add__(self, other: str | bytes | bytearray | "BHA_string") -> "BHA_string":
+        temp = bytearray(self._buf)
+        if isinstance(other, BHA_string):
+            temp.extend(other._buf)
+        elif isinstance(other, str):
+            temp.extend(other.encode("utf-8"))
+        elif isinstance(other, (bytes, bytearray)):
+            temp.extend(other)
+        else:
+            raise TypeError
+        return BHA_string(temp)
+    def __iadd__(self, other: str | bytes | bytearray | "BHA_string") -> "BHA_string":
+        if isinstance(other, BHA_string):
+            self._buf.extend(other._buf)
+        elif isinstance(other, str):
+            self._buf.extend(other.encode("utf-8"))
+        elif isinstance(other, (bytes, bytearray)):
+            self._buf.extend(other)
+        else:
+            raise TypeError
+        return self
+    def __cin__(self) -> None:
+        line = sys.stdin.readline()
+        self._buf.clear()
+        self.write(line.rstrip("\r\n").rstrip("\n"))
+    def __iter__(self):
+        return BHA_Iterator(iter(self._buf))
+M = (1 << 521) - 1
+
+E1, E2, E3, E4, E5 = 11, 13, 17, 19, 23
+E6, E7, E8, E9, E10 = 29, 31, 37, 41, 43
+
+IV_R = 0x2957A2F168CC3509
+IV_C = 0x71D39E40BB72A61F
+C1 = 0x19260817
+C2 = 0x114514
+C3 = 0xABCDEF
+C4 = 0x233333
+C5 = 0x666666
+C6 = 0x123456789
+
+def fast_pow(x, e):
+    return pow(x, e, M)
+
+def tenth_order_mapping(x):
+    x = (fast_pow(x, 210) + fast_pow(210, x) + fast_pow(x, x) - 1) & M
+    x = fast_pow(x, E1) ^ C1
+    x = (fast_pow(x, E2) + C2) & M
+    x_shr = (x >> 18) & M
+    x_shl = (x << 9) & M
+    x = fast_pow(x, E3) ^ x_shr ^ x_shl
+    x = (fast_pow(x, E4) * C3) & M
+    x = fast_pow(x, E5) ^ ((x << 21) & M)
+    x = fast_pow(x, E6) ^ C4
+    x = (fast_pow(x, E7) - C6) & M
+    x_s12 = (x >> 12) & M
+    x_s15 = (x << 15) & M
+    x = fast_pow(x, E8) ^ (x_s12 & x_s15)
+    x = (fast_pow(x, E9) * C6) & M
+    x = fast_pow(x, E10) ^ ((x << 33) & M)
+    return x % M
+
+class UltraMersenneFractalSponge():
+    __slots__ = ('r','c','total_len','data_pool')
+    def __init__(self,data = None):
+        self.r = IV_R
+        self.c = IV_C
+        self.total_len = 0
+        self.data_pool = []
+        self.absorb(data) if data != None else self
+    def absorb(self, data: bytes):
+        self.total_len += len(data)
+        step = max(8, int(len(data)))
+        for i in range(0, len(data), step):
+            chunk = data[i:i+step]
+            num = int.from_bytes(chunk, "big")
+            self.data_pool.append(num)
+            self.r = tenth_order_mapping(self.r^num)
+            term = (pow(num, 7, M) * self.r) % M
+            self.c = (self.c ^ self.r + term) % M
+        return self
+    def digest(self):
+        return bytes.fromhex(self.hexdigest())
+    def _fold_recursive(self, arr):
+        if len(arr) <= 2:
+            res = 0
+            for v in arr:
+                res = (res + tenth_order_mapping(v ^ res)) % M
+            return res
+        mid = len(arr) >> 1
+        left = self._fold_recursive(arr[:mid])
+        right = self._fold_recursive(arr[mid:])
+        l3 = pow(left, 3, M)
+        r3 = pow(right, 3, M)
+        cross = (left * right ^ l3 + r3) % M
+        return tenth_order_mapping(cross)
+    def hexdigest(self,bitn = 256):
+        len3 = pow(self.total_len, 3, M)
+        self.r ^= len3
+        self.c = (self.c + len3 * self.r) % M
+
+        fold_val = self._fold_recursive(self.data_pool)
+        self.r = (self.r ^ fold_val) % M
+        for _ in range(10):
+            self.r = tenth_order_mapping(self.r)
+            self.c = tenth_order_mapping(self.c)
+            r3 = pow(self.r, 3, M)
+            c3 = pow(self.c, 3, M)
+            cross = (r3 ^ c3 + self.r * self.c) % M
+            self.r, self.c = cross % M, (cross ^ self.r) % M
+        res = ((self.r << 128) + self.c) % M
+        mask = (1 << bitn) - 1
+        return f"{res & mask:064x}"
+    squeeze = hexdigest
+umfs = UltraMersenneFractalSponge
 def _real_generator(in_q,out_q):
     pid = os.getpid()
     tid = threading.get_ident()
@@ -805,8 +968,8 @@ def _real_generator(in_q,out_q):
     + platform.processor() + str(os.cpu_count()))
     mix_seed = (
     str(raw_seed) + sys_info + dynamic_data + os.urandom(8).hex())
-    h1 = hashlib.sha3_512(mix_seed.encode('utf-8')).digest()
-    h2 = hashlib.md5(h1).digest()
+    h1 = umfs(mix_seed.encode()).digest()
+    h2 = hashlib.md5(h1.hex().encode()).digest()
     mt_seed = int.from_bytes(h2, byteorder='big')
     __mt_state = array.array('I',[0] * 624)
     __mt_state[0] = mt_seed & 0xFFFFFFFF
@@ -842,11 +1005,11 @@ def create_mt_xor25_generator():
     """
     MT-XOR25 永久密钥使用规范：
     1. 私钥生成：直接使用MT-XOR25算法输出的哈希值作为永久私钥；
-    2. 公钥推导：无需自定义逻辑，直接调用Python内置hashlib.sha3_512对私钥做哈希，结果即为公钥（SHA-2家族位数越多越安全，512位适配永久密钥场景）：
-    public_key = hashlib.sha3_512(private_key.encode('utf-8')).hexdigest()；
+    2. 公钥推导：无需自定义逻辑，调用UMFS对私钥做哈希，结果即为公钥（SHA-2家族位数越多越安全，512位适配永久密钥场景）：
+    public_key = umfs(private_key.encode()).hexdigest()；
     3. 身份验证：
    - 服务端用MT-XOR25生成随机挑战串，下发给用户端；
-   - 用户端用MT-XOR25私钥对挑战串做sha512哈希，生成签名并返回；
+   - 用户端用MT-XOR25私钥对挑战串做umfs哈希，生成签名并返回；
    - 服务端用保存的公钥验证签名（对比哈希结果），匹配则身份验证通过。
     公钥加密规范（非强制但建议，泄漏了也没事）
     不要用 HTTP 协议传输公钥；
@@ -856,7 +1019,7 @@ def create_mt_xor25_generator():
     私钥强制保密规则：
     1. 生成：仅在用户本地设备生成，绝不传输到任何服务器/第三方；
     2. 存储：仅加密存储在用户本地（如设备安全区、加密文件），禁止明文存储；
-    3. 传输：绝对禁止通过任何渠道（HTTP/邮件/聊天软件）传输私钥；
+    3. 传输：绝对禁止通过任何渠道（HTTPS/邮件/聊天软件）传输私钥；
     4. 泄露后果：私钥一旦泄露，攻击者可完全冒充用户身份，且无法补救（只能重置私钥和公钥）。
     """
     number = multiprocessing.cpu_count() << 1
@@ -869,12 +1032,11 @@ def create_mt_xor25_generator():
         p.start()
         processes.append(p)
     class XOR25_Generator():
-        def __call__(self):
-            in_q[0].put("next")
-            return out_q.get()
+        def __call__(self) -> str:
+            return next(it)
         def __iter__(self):
             while 1:
-                yield from self.batch_generate(1000)
+                yield from self.batch_generate(number)
         def __next__(self):
             return self()
         def batch_generate(self,n = 1):
@@ -882,14 +1044,48 @@ def create_mt_xor25_generator():
                 in_q[i%len(in_q)].put("next")
             for i in range(n):
                 yield out_q.get()
-        def randrange(self,start,end):
-            n = sum(map(lambda x:int(x,base = 16),self.batch_generate(
-                end//(1<<128)+1)))
-            return start + (n % (end - start))
-        randint = lambda self,s,e:self.randrange(s,e+1)
-        def unifrom(self,start,end,bperv = 32):
-            return self.randint(start << bperv,end << bperv)/1 << bperv
-    return XOR25_Generator()
+        def getrandbits(self, k: int) -> int:
+            if k <= 0:
+                raise ValueError("bits must be positive")
+            res = 0
+            rem = k
+            need = (rem + 0x7F) >> 7
+            for hx in self.batch_generate(need):
+                chunk = int(hx, 16)
+                take = rem if rem < 128 else 128
+                shift = 128 - take
+                res = (res << take) | (chunk >> shift)
+                rem -= take
+                if not rem:
+                    break
+            return res
+        def uniform(self, low: float = 0.0, high: float = 1.0) -> float:
+            r = self.getrandbits(1024)
+            return low + (high - low) * r / (1 << 1024)
+        def randrange(self, start, stop=None, step=1):
+            if stop is None:
+                stop, start = start, 0
+            span = stop - start
+            if span <= 0:
+                raise ValueError("stop must be greater than start")
+            cnt = ((span - 1) // step) + 1
+            if cnt <= 0:
+                raise ValueError("empty range")
+            MAX_U128 = (1 << 128) - 1
+            bias = MAX_U128 % cnt
+            BATCH = 32
+            while True:
+                for hx in self.batch_generate(BATCH):
+                    num = int(hx, 16)
+                    if num + bias <= MAX_U128:
+                        offset = num % cnt
+                        return start + offset * step
+        def randint(self, a, b):
+            return self.randrange(a, b + 1)
+    gen = XOR25_Generator()
+    it = iter(gen)
+    return gen
+mt_xor25 = create_mt_xor25_generator
 @mypyc_attr(native_class=False)
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
     def __init__(self, *args, protected_names = ("T", "F", "BHA_Bool", "BHA_List", "BoolHybridArray", "BoolHybridArr",
@@ -969,19 +1165,18 @@ def Ask_arr(arr):
     else:
         return str(arr)
 def temp2():
-    __temp1 = lru_cache(lambda x:(
-        bit_stream := bytes(0 if k < lead_zero else (n >> ((total_len - 1) - k)) & 1 for k in range(total_len)),
-        arr := array.array('B', FalsesArray(total_len)),
-        memcpy(arr.buffer_info()[0], bit_stream, total_len),arr)[-1]
-        if(n := int(x, base=16),
-        lead_zero := len(x) - len(x.lstrip('0')),
-        total_len := lead_zero + n.bit_length())
-        else array.array('B'))
+    @lru_cache
+    def __temp1(x):
+        n = int(x, base=16)
+        lead_zero = len(x) - len(x.lstrip('0'))
+        total_len = lead_zero + n.bit_length()
+        bit_stream = bytes(0 if k < lead_zero else (n >> ((total_len - 1) - k)) & 1 for k in range(total_len))
+        return bit_stream
     return lambda x: BoolHybridArr(__temp1(x))
 temp2 = temp2()
 @BHA_Function
 def Ask_BHA(path):
-    if '.bha' not in path.lower():
+    if not path.lower().endswith('.bha'):
         path += '.bha'
     with open(path, 'a+b') as f:
         f.seek(0)
@@ -1028,7 +1223,7 @@ class BHA_Queue(Collection,metaclass = ResurrectMeta):
         return not self
 @BHA_Function
 def Create_BHA(path,arr):
-    if '.bha' not in path.lower():
+    if not path.lower().endswith('.bha'):
         path += '.bha'
     temp = Ask_arr(arr).strip().encode('utf-8')
     with open(path, "w+b") as f:
@@ -1067,12 +1262,13 @@ def numba_opt():
     bisect.bisect_left = numba.njit(sig, cache=True,wraparound=True)(bisect.bisect_left)
     bisect.bisect_right = numba.njit(sig, cache=True,wraparound=True)(bisect.bisect_right)
 from ._cppiostream import cin,cout,endl
-def namespace(name,bases,namespace_):
-    tmp = {}
-    for base in bases:tmp.update(base.__namespace__)
-    self = ProtectedBuiltinsDict({**tmp,**namespace_},name = name,protected_names = namespace_.get("protected_names",()))
-    self["__namespace__"] = self
-    return self
+class namespace(ProtectedBuiltinsDict):
+    def __new__(cls,name,bases,namespace_):
+        tmp = {}
+        for base in bases:tmp.update(base.__namespace__)
+        self = ProtectedBuiltinsDict({**tmp,**namespace_},name = name,protected_names = namespace_.get("protected_names",()))
+        self["__namespace__"] = self
+        return self
 
 builtins.np = np
 builtins.T = BHA_bool(1)
