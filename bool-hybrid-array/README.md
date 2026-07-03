@@ -675,6 +675,7 @@ cout << string#输出：bool-hybrid-array is efficient boolean array
 * **9.11.29**：修复一些已知的问题
 * **9.11.30**：修复语法错误
 * **9.11.31**：修复namespace的继承错误
+* **9.11.32**：修复9.11.31无法导入的错误
 
 
 
