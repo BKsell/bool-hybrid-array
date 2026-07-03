@@ -14,6 +14,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.8"
-      - run: pip install build
-      - run: python -m build
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Install build dependencies
+        run: pip install build
+        working-directory: ../../bool-hybrid-array
+      - name: Build package
+        run: python -m build
+        working-directory: ../../bool-hybrid-array
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ../../bool-hybrid-array/dist
