@@ -53,7 +53,7 @@ finally:
         license="MIT; Supplementary binding terms contained in NOTICE file",
         license_files=["LICENSE", "NOTICE"],
         name="bool-hybrid-array",
-        version="9.11.29",
+        version="9.11.31",
         author="蔡靖杰",
         extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],"cython_opt":["cython>=3.2.4"],"cycy opt":["cycy-runtime>=0.2.5"]},
         author_email="1289270215@qq.com",
@@ -81,7 +81,7 @@ finally:
             "Operating System :: OS Independent",
         ],
         keywords="boolean array, compact storage",
-        package_data={"": ["README.md", "LICENSE","NOTICE",'temp.py', 'temp.cmd','BHA_Opener.7z'],"bool_hybrid_array":["*.py","*.pyd","*.c","*"],"bool_hybrid_array/__pycache__":['*.pyc'],"bool_hybrid_array/int_array":["*.py","*.pyd","*.c","*"],"bool_hybrid_array/float_array":["*.py","*.pyd","*.c","*"]},
+        package_data={"": ["README.md", "LICENSE","NOTICE",'temp.py', 'temp.cmd','BHA_Opener.7z'],"bool_hybrid_array":["*.py","*.pyd","*.c","*"],r"bool_hybrid_array\__pycache__":['*.pyc'],r"bool_hybrid_array\int_array":["*.py","*.pyd","*.c","*"],r"bool_hybrid_array\float_array":["*.py","*.pyd","*.c","*"]},
         include_package_data=True,
         url="https://github.com/BKsell/bool-hybrid-array",
         project_urls={
