@@ -53,7 +53,7 @@ finally:
         license="MIT; Supplementary binding terms contained in NOTICE file",
         license_files=["LICENSE", "NOTICE"],
         name="bool-hybrid-array",
-        version="9.11.31",
+        version="9.11.32",
         author="蔡靖杰",
         extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],"cython_opt":["cython>=3.2.4"],"cycy opt":["cycy-runtime>=0.2.5"]},
         author_email="1289270215@qq.com",

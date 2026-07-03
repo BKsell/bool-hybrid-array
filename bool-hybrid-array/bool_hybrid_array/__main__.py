@@ -363,3 +363,28 @@ result = arr1 * arr2
 
 print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 十进制143（13×11=143）
 
+
+#__cin__魔法方法（9.11.21版本新增）
+
+import ctypes
+
+class point:
+    __slots__ = ("x", "y")
+    def __init__(x = 0,y = 0):
+        self.x,self.y = ctypes.c_int(x),ctypes.c_int(y)
+    def __cin__(self):
+        cin >> self.x >> self.y
+
+point = point(0,0)
+
+cin >> point #输入：20 13
+
+cout << point.x << ' ' << point.y #输出：20 13
+
+#BHA_string（9.11.21版本新增）
+
+string = BHA_string('')
+
+cin >> string#输入：bool-hybrid-array is efficient boolean array
+
+cout << string#输出：bool-hybrid-array is efficient boolean array
