@@ -1,3 +1,2 @@
-try:from .compile_core import *
-except:from .core import*
+from .core import*
 __all__ = tuple(globals())

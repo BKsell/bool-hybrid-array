@@ -9,7 +9,7 @@
 
 ## ***注：大版本号更新并非不兼容更新，而是重大更新***
 
-注：当API完全稳定时就会发布版本规则较严谨的new-1.0.0版本，预期为10.x版本结束后
+注：当API完全稳定时就会发布版本规则较严谨的new-1.0.0版本，预期为10.x或11.x版本结束后
 
 ***注意：目前社区中若存在名称类似（如包含 “bool-hybrid-array”+ 后缀、boolean\_array、validate.io-boolean-array）的库，均与本项目（bool-hybrid-array）无关联，本项目的所有功能设计、代码实现均为独立开发；***
 ***其他平台里的类似名库绝不是我的库***
@@ -20,11 +20,12 @@
 
 ## 安装方法
 
-使用pip安装：
+使用uv安装：
 
 ```bash
 
-pip install bool-hybrid-array
+pip install uv
+python -m uv pip install bool-hybrid-array
 
 ```
 
@@ -32,7 +33,7 @@ pip install bool-hybrid-array
 
 ```bash
 
-pip install -U bool-hybrid-array
+python -m uv pip install -U bool-hybrid-array
 
 ```
 
@@ -460,14 +461,14 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 
 import ctypes
 
-class point:
+class Point:
     __slots__ = ("x", "y")
-    def __init__(x = 0,y = 0):
+    def __init__(self,x = 0,y = 0):
         self.x,self.y = ctypes.c_int(x),ctypes.c_int(y)
-    def __cin__(self):
-        cin >> self.x >> self.y
+    def __cin__(self,stream = cin):
+        stream >> self.x >> self.y
 
-point = point(0,0)
+point = Point()
 
 cin >> point #输入：20 13
 
@@ -475,11 +476,26 @@ cout << point.x << ' ' << point.y #输出：20 13
 
 #BHA_string（9.11.21版本新增）
 
-string = BHA_string('')
+string = BHA_string()
 
 cin >> string#输入：bool-hybrid-array is efficient boolean array
 
 cout << string#输出：bool-hybrid-array is efficient boolean array
+
+#fstream和操纵符（9.11.34版本新增）
+
+with ofstream("test.out") as fout:
+
+    fout << "test" << endl
+
+s = BHA_string()
+
+with ifstream("test.out") as fin:
+
+    fin >> s
+
+cout  << setfill('f') << setw(10) << s << setfill(' ')#输出：fffffftest
+
 
 
 ```
@@ -676,8 +692,15 @@ cout << string#输出：bool-hybrid-array is efficient boolean array
 * **9.11.30**：修复语法错误
 * **9.11.31**：修复namespace的继承错误
 * **9.11.32**：修复9.11.31无法导入的错误
-
-
+* **9.11.33**：修复了一些已知的问题
+* **9.11.34**：支持fstream和操纵符
+* **9.11.35**：修复fstream的错误
+* **9.11.36**：修复fstream的错误×2
+* **9.11.37**：修复fstream的错误×3
+* **9.11.38**：修复了一些已知的问题
+* **9.11.39**：优化性能
+* **9.11.40**：修复一些已知的问题
+* **9.11.41**：修复mt_xor25的bug
 
 
 
@@ -700,7 +723,7 @@ cout << string#输出：bool-hybrid-array is efficient boolean array
 
 
 ### bool-hybrid-array
-🔥 全网下载86K+，但GitHub星标=0的「神秘Python包」🔥
+🔥 全网下载130K+，但GitHub星标=0的「神秘Python包」🔥
 
 #### 为啥这么多人下载还没人来GitHub？
 我也不知道😭 可能大家下载完就把我忘了，求各位大佬来看看孩子吧！

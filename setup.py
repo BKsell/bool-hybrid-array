@@ -1,20 +1,52 @@
 from setuptools import setup, find_packages, Extension
-from setuptools.command.build_ext import build_ext
-import os,sys,subprocess
+import os,sys,subprocess,shutil,atexit
 try:
     from Cython.Build import cythonize
+    import numpy as np
+    include_dirs = [np.get_include()]
 
     source_files = [
         "bool_hybrid_array/core.py",
         "bool_hybrid_array/int_array/core.py",
         "bool_hybrid_array/float_array/core.py"
     ]
+    pyx_files = []
+    for idx, py_src in enumerate(source_files):
+        if idx == 1: 
+            pyx_files.append(py_src)
+            continue
+        pyx_src = py_src[:-3] + ".pyx"
+        shutil.copy2(py_src, pyx_src)
+        pyx_files.append(pyx_src)
+        atexit.register(lambda f=pyx_src: os.path.exists(f) and os.remove(f))
+    source_files = pyx_files
     exts = []
     for src in source_files:
         mod_path, _ = os.path.splitext(src)
         mod_name = mod_path.replace("/", ".")
-        c_args = ["/O2", "/fp:fast"] if sys.platform == "win32" else ["-O3"]
-        exts.append(Extension(mod_name, sources=[src], extra_compile_args=c_args))
+        if sys.platform == "win32":
+            c_args = [
+                "/O2", "/fp:fast", "/GL", "/GT", "/Oi", "/Ot", "/Qpar",
+                "/Ob3", "/GF", "/Gy", "/Gw", "/Gv", "/Qvec"
+            ]
+            link_args = ["/LTCG", "/OPT:REF", "/OPT:ICF"]
+        elif sys.platform in {"linux", "darwin"}:
+            c_args = [
+                "-O3", "-march=native", "-mtune=native", "-ffast-math", "-fno-math-errno",
+                "-funroll-loops", "-funroll-all-loops", "-fomit-frame-pointer",
+                "-ftree-vectorize", "-fvect-cost-model=unlimited", "-finline-functions",
+                "-finline-limit=10000", "-fno-stack-protector", "-fmerge-all-constants"
+            ]
+            link_args = ["-flto=full", "-Wl,--gc-sections"]
+        else:
+            c_args = ["-O3", "-ffast-math", "-funroll-loops"]
+            link_args = []
+        exts.append(Extension(
+            mod_name,
+            sources=[src],
+            extra_compile_args=c_args,
+            extra_link_args=link_args
+        ))
 
     ext_modules = cythonize(
         exts,
@@ -23,21 +55,30 @@ try:
             "boundscheck": False,
             "wraparound": False,
             "cdivision": True,
-            "nonecheck": False
-        }
+            "nonecheck": True,
+            "initialized_check": True,
+            "overflowcheck": True,
+            "fastmath": True,
+            "infer_types": True,
+            "annotation_typing": True,
+            "optimize.inline": True,
+            "optimize.unroll": True,
+            "optimize.eliminate_dead_code": True,
+            "optimize.aggressive_bounds": True,
+            "profile": False,
+            "linetrace": False,
+            "docstrings": False,
+            "emit_code_comments": False,
+            "c_api_binop_methods": False,
+            "annotate": False
+        },
+        compiler_directives_path=None,
+        annotate=False
     )
 
-    class RenameExt(build_ext):
-        def get_ext_filename(self, ext_name):
-            orig_file = super().get_ext_filename(ext_name)
-            folder, old_filename = os.path.split(orig_file)
-            new_filename = old_filename.replace("core.", "compile_core.")
-            return os.path.join(folder, new_filename)
-
-    cmd_class = {"build_ext": RenameExt}
 except:
     ext_modules = []
-    cmd_class = {}
+    include_dirs = []
 finally:
     def get_long_description():
         readme_path = os.path.join(os.path.dirname(__file__), 'README.md')
@@ -53,14 +94,14 @@ finally:
         license="MIT; Supplementary binding terms contained in NOTICE file",
         license_files=["LICENSE", "NOTICE"],
         name="bool-hybrid-array",
-        version="9.11.31",
+        version="9.11.41",
         author="蔡靖杰",
         extras_require={"int_array":[],"numba_opt": ["numba>=0.55.0"],"cython_opt":["cython>=3.2.4"],"cycy opt":["cycy-runtime>=0.2.5"]},
         author_email="1289270215@qq.com",
         description="一个高效的布尔数组（密集+稀疏混合存储，节省内存）",
         long_description=get_long_description(),
         long_description_content_type="text/markdown",
-        packages=find_packages(),
+        packages=set(find_packages()+["bool_hybrid_array.int_array","bool_hybrid_array.float_array"]),
         python_requires=">=3.8",
         install_requires=['numpy>=1.19.0'],
         classifiers=[
@@ -92,5 +133,5 @@ finally:
             "lssue 反馈（Gitee站）": "https://gitee.com/BKsell/bool-hybrid-array.git/issues"
         },
         ext_modules = ext_modules,
-        cmdclass = cmd_class,
+        include_dirs = include_dirs,
     )

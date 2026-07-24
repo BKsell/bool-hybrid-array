@@ -368,14 +368,14 @@ print(result)  # 输出：BoolHybridArr([1,1,0,0,0,1,1]) → 二进制1100011 = 
 
 import ctypes
 
-class point:
+class Point:
     __slots__ = ("x", "y")
-    def __init__(x = 0,y = 0):
+    def __init__(self,x = 0,y = 0):
         self.x,self.y = ctypes.c_int(x),ctypes.c_int(y)
-    def __cin__(self):
-        cin >> self.x >> self.y
+    def __cin__(self,stream = cin):
+        stream >> self.x >> self.y
 
-point = point(0,0)
+point = Point()
 
 cin >> point #输入：20 13
 
@@ -388,3 +388,18 @@ string = BHA_string('')
 cin >> string#输入：bool-hybrid-array is efficient boolean array
 
 cout << string#输出：bool-hybrid-array is efficient boolean array
+
+#fstream和操纵符（9.11.34版本新增）
+
+with ofstream("test.out") as fout:
+
+    fout << "test" << endl
+
+s = BHA_string()
+
+with ifstream("test.out") as fin:
+
+    fin >> s
+
+cout  << setfill('f') << setw(10) << s#输出：fffffftest
+

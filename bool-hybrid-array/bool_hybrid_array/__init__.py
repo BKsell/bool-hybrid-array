@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 import sys
 from types import ModuleType,FunctionType
-try:from . import compile_core as core
-except:from . import core
+from . import core
 from .core import __builtins__,builtins
 try:from . import int_array,float_array
 except:pass
-__version__ = "9.11.32"
+__version__ = "9.11.41"
 public_objects = []
 for name in dir(core):
-    if not name.startswith("_") or (name.endswith("__") and name.startswith("__")):
+    if not name.startswith("_"):
         obj = getattr(core, name)
-        if isinstance(obj, (type, ModuleType)) or callable(obj):
-            public_objects.append(name)
+        public_objects.append(name)
 __all__ = public_objects + ["__version__","__builtins__","builtins","core","builtins","__dict__","int_array","float_array"]
 globals().update({
     name: getattr(core, name)
@@ -21,7 +19,7 @@ globals().update({
 try:
     sys.modules[__name__] =  ProtectedBuiltinsDict(globals())
     sys.modules[__name__].name = __name__
-    sys.modules[__name__+'.core'] = ProtectedBuiltinsDict(core.__dict__,name = f'{__name__}.core')
+    sys.modules[__name__].core = ProtectedBuiltinsDict(core.__dict__,name = f'{__name__}.core')
     __dict__ = ProtectedBuiltinsDict(globals())
     sys.modules[__name__].int_array = ProtectedBuiltinsDict(int_array.__dict__,name = __name__+'.int_array')
     sys.modules[__name__].float_array = ProtectedBuiltinsDict(float_array.__dict__,name = __name__+'.float_array')

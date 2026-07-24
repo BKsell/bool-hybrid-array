@@ -1,5 +1,6 @@
-# cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False
+# cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, annotation_typing=True, cdivision=True, infer_types=True
 from __future__ import annotations
+import inspect
 try:from mypy_extensions import mypyc_attr
 except:
     def mypyc_attr(*a,**k):
@@ -21,7 +22,7 @@ import platform
 import threading
 hybrid_array_cache:weakref.WeakKeyDictionary[BoolHybridArray,int] = weakref.WeakKeyDictionary()
 try:
-    msvcrt = ctypes.CDLL('msvcrt.dll')
+    import msvcrt
     memcpy = msvcrt.memcpy
 except:
     try:
@@ -112,7 +113,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):# type: ignore
     except:
         pass
     original_dict = MappingProxyType(original_dict)
-#ResurrectMeta.__class__ = ResurrectMeta
+ResurrectMeta.__class__ = ResurrectMeta
 class BHA_Function(metaclass=ResurrectMeta):# type: ignore
     def __init__(self,v):
         self.data,self.module = v,__name__
@@ -223,6 +224,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             return func(self, *args, **kwargs)
         setattr(self, func.__name__, wrapper)
         return func
+    def resize(size):
+        self.size = size
     def __hash__(self):
         return self._cached_hash
     def accessor(self, i: int, value: Any = None) -> Any:
@@ -594,30 +597,44 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
     def __reduce__(self):
         return BoolHybridArr,((self.large,self.small,self.split_index,self.is_sparse,self.Type,self.hash_),),
     dequeue = lambda self:self.pop(0)
-@mypyc_attr(native_class=False)
 class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __new__(cls, lst: Iterable = (), is_sparse=None, Type = None, hash_ = True, split_index = None) -> BoolHybridArray:
-        if isinstance(lst,tuple) and isinstance(lst[0],array.array) and isinstance(lst[1],(BoolHybridArray._CompactBoolArray,np.ndarray)):
+        if lst and isinstance(lst,tuple) and isinstance(lst[0],array.array) and isinstance(lst[1],(BoolHybridArray._CompactBoolArray,np.ndarray)):
             arr = TruesArray(0)
             arr.large,arr.small,arr.split_index,arr.is_sparse,arr.Type,arr.hash_ = lst
             return arr
         a = isinstance(lst, (Iterator, Generator, map))
         if a:
-            lst, copy1, copy2 = itertools.tee(lst, 3)
-            size = sum(1 for _ in copy1)
-            true_count = sum(bool(val) for val in copy2)
+            lst = BHA_Iterator(lst)
+            size = sum(1 for _ in lst)
+            true_count = sum(bool(val) for val in lst)
         else:
             size = len(lst)
             true_count = sum(bool(val) for val in lst)
-        if size == 0:
+        if not size:
             return BoolHybridArray(0, 0, is_sparse=False if is_sparse is None else is_sparse)
         if is_sparse is None:
             is_sparse = true_count <= (size - true_count)
         if split_index == None:
-            split_index = int(min(size * 0.8, math.sqrt(size) * 100))
-            split_index = math.isqrt(size) if true_count>size/3*2 or true_count<size/3 else max(split_index, 1)
-            split_index = int(split_index) if split_index < 150e+7*2 else int(145e+7*2)
+            C = 4 if size < (1 << 32) else 8
+            total_true = sum(bool(v) for v in lst)
+            running_true = 0
+            min_cost = float('inf')
+            best_split = 0
+            val_iter = iter(lst)
+            for s in range(size):
+                small_cost = s + 7 >> 3
+                seg_true = total_true - running_true
+                seg_len = size - 1 - s
+                seg_false = seg_len - seg_true
+                large_cost = seg_true * C if is_sparse else seg_false * C
+                cur_cost = small_cost + large_cost
+                if cur_cost < min_cost:
+                    min_cost = cur_cost
+                    best_split = s
+                running_true += bool(next(val_iter))
+            split_index = best_split
         arr = BoolHybridArray(split_index = split_index, size = size, is_sparse = is_sparse, Type = Type, hash_ = F)
         small_max_idx = min(split_index, size - 1)
         if a:
@@ -660,17 +677,16 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):# type: ignore
         hybrid_array_cache[arr] = new_hash
         return arr
 def TruesArray(size, Type = None, hash_ = True):
-    split_index = min(size//10, math.isqrt(size))
+    split_index = min(size >> 4, math.isqrt(size))
     split_index = max(split_index, 1)
     split_index = int(split_index) if split_index < 150e+7*2 else int(145e+7*2)
     return BoolHybridArray(split_index,size,Type = Type,hash_ = hash_)
 def FalsesArray(size, Type = None,hash_ = True):
-    split_index = min(size//10, math.isqrt(size))
+    split_index = min(size >> 4, math.isqrt(size))
     split_index = max(split_index, 1)
     split_index = int(split_index) if split_index < 150e+7*2 else int(145e+7*2)
     return BoolHybridArray(split_index,size,True,Type = Type,hash_ = hash_)
 Bool_Array = np.arange(2,dtype = np.uint8)
-@mypyc_attr(native_class=False)
 class BHA_bool(int,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __new__(cls, value):
@@ -797,7 +813,7 @@ class BHA_Iterator(Iterator,metaclass=ResurrectMeta):# type: ignore
         arr = np.fromiter(self, dtype=dtype)
         return arr.copy() if copy else arr.view()
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
-class BHA_string:
+class BHA_string(metaclass = ResurrectMeta):
     def __init__(self, data: str | bytes | bytearray = ""):
         if isinstance(data, str):
             self._buf = bytearray(data.encode("utf-8"))
@@ -864,8 +880,9 @@ class BHA_string:
         else:
             raise TypeError
         return self
-    def __cin__(self) -> None:
-        line = sys.stdin.readline()
+    def __cin__(self,stream = None) -> None:
+        if stream == None:line = sys.stdin.readline()
+        else:line = stream.getline()
         self._buf.clear()
         self.write(line.rstrip("\r\n").rstrip("\n"))
     def __iter__(self):
@@ -905,7 +922,7 @@ def tenth_order_mapping(x):
     x = fast_pow(x, E10) ^ ((x << 33) & M)
     return x % M
 
-class UltraMersenneFractalSponge():
+class UltraMersenneFractalSponge(metaclass =  ResurrectMeta):
     __slots__ = ('r','c','total_len','data_pool')
     def __init__(self,data = None):
         self.r = IV_R
@@ -1001,6 +1018,7 @@ def _real_generator(in_q,out_q):
         h3 = hashlib.sha3_512(str(xor_result).encode('utf-8')).digest()
         final = hashlib.md5(h3).hexdigest()
         out_q.put(final)
+@lru_cache
 def create_mt_xor25_generator():
     """
     MT-XOR25 永久密钥使用规范：
@@ -1031,7 +1049,7 @@ def create_mt_xor25_generator():
                                   args=(in_q[i], out_q), daemon=True)
         p.start()
         processes.append(p)
-    class XOR25_Generator():
+    class XOR25_Generator(metaclass = ResurrectMeta):
         def __call__(self) -> str:
             return next(it)
         def __iter__(self):
@@ -1086,13 +1104,9 @@ def create_mt_xor25_generator():
     it = iter(gen)
     return gen
 mt_xor25 = create_mt_xor25_generator
-@mypyc_attr(native_class=False)
+from ._cppiostream import *
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
-    def __init__(self, *args, protected_names = ("T", "F", "BHA_Bool", "BHA_List", "BoolHybridArray", "BoolHybridArr",
-                                "TruesArray", "FalsesArray", "ProtectedBuiltinsDict", "builtins",
-                                "__builtins__", "__dict__","ResurrectMeta","math",
-                                "np","protected_names","BHA_Function",
-                                "__class__","Ask_BHA","Create_BHA","Ask_arr","numba_opt","bool_hybrid_array","BHA_Queue","cin","cout","endl","create_mt_xor25_generator","namespace"),
+    def __init__(self, *args, protected_names = (("T", "F","Ask_arr","Ask_BHA","Create_BHA","temp2","BHA_Queue","numba_opt","namespace")+tuple(globals())),
                  name = 'builtins', **kwargs):
         super().__init__(*args, **kwargs)
         if name == 'builtins':
@@ -1135,10 +1149,10 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
     def __getattr__(self, name):
         try:
             return super().__getattribute__(name)
-        except AttributeError:
+        except Exception:
             if name in self:
                 return self[name]
-            raise AttributeError(f"module 'builtins' has no attribute '{name}'") from None
+            else:raise AttributeError(f"module 'builtins' has no attribute '{name}'") from None
     def __setattr__(self,name,value):
         try:protected = self.protected_names
         except Exception:protected = self
@@ -1261,7 +1275,6 @@ def numba_opt():
     ])
     bisect.bisect_left = numba.njit(sig, cache=True,wraparound=True)(bisect.bisect_left)
     bisect.bisect_right = numba.njit(sig, cache=True,wraparound=True)(bisect.bisect_right)
-from ._cppiostream import cin,cout,endl
 class namespace(ProtectedBuiltinsDict):
     def __new__(cls,name,bases,namespace_):
         tmp = {}
@@ -1269,37 +1282,44 @@ class namespace(ProtectedBuiltinsDict):
         self = ProtectedBuiltinsDict({**tmp,**namespace_},name = name,protected_names = namespace_.get("protected_names",()))
         self["__namespace__"] = self
         return self
+if inspect.ismodule(builtins):
+    builtins.np = np
+    builtins.T = BHA_bool(1)
+    builtins.F = BHA_bool(0)
+    builtins.BHA_Bool = BHA_Bool
+    builtins.BHA_List = BHA_List
+    builtins.FalsesArray = FalsesArray
+    builtins.TruesArray = TruesArray
+    builtins.BoolHybridArr = BoolHybridArr
+    builtins.BHA_Iterator = BHA_Iterator
+    builtins.BoolHybridArray = BoolHybridArray
+    builtins.BHA_Bool.T, builtins.BHA_Bool.F = BHA_bool(1), BHA_bool(0)
+    builtins.ResurrectMeta = ResurrectMeta
+    builtins.ProtectedBuiltinsDict = ProtectedBuiltinsDict
+    builtins.BHA_Function = BHA_Function
+    builtins.Ask_BHA = Ask_BHA
+    builtins.Create_BHA = Create_BHA
+    builtins.numba_opt = numba_opt
+    builtins.cin = cin
+    builtins.cout = cout
+    builtins.endl = endl
+    builtins.BHA_Queue = BHA_Queue
+    builtins.create_mt_xor25_generator = create_mt_xor25_generator
+    builtins.BHA_string = BHA_string
+    builtins.mt_xor25 = mt_xor25
 
-builtins.np = np
-builtins.T = BHA_bool(1)
-builtins.F = BHA_bool(0)
-builtins.BHA_Bool = BHA_Bool
-builtins.BHA_List = BHA_List
-builtins.FalsesArray =  FalsesArray
-builtins.TruesArray = TruesArray
-builtins.BoolHybridArr = BoolHybridArr
-builtins.BHA_Iterator = BHA_Iterator
-builtins.BoolHybridArray = BoolHybridArray
-builtins.BHA_Bool.T,builtins.BHA_Bool.F = BHA_bool(1),BHA_bool(0)
-builtins.ResurrectMeta = ResurrectMeta
-builtins.ProtectedBuiltinsDict = ProtectedBuiltinsDict
-builtins.BHA_Function = BHA_Function
-builtins.Ask_BHA = Ask_BHA
-builtins.Create_BHA = Create_BHA
-builtins.numba_opt = numba_opt
-builtins.cin = cin
-builtins.cout = cout
-builtins.endl = endl
-builtins.BHA_Queue = BHA_Queue
-builtins.create_mt_xor25_generator = create_mt_xor25_generator
-Tid,Fid = id(builtins.T),id(builtins.F)
-original_id = builtins.id
-def fake_id(obj):
-    if isinstance(obj, BHA_bool):return Tid if obj else Fid
-    else:return original_id(obj)
-builtins.id = fake_id
-original_builtins_dict = builtins.__dict__.copy()
-__builtins__ = ProtectedBuiltinsDict(original_builtins_dict)
-builtins = __builtins__
-sys.modules['builtins'] = builtins
-builtins.name = 'builtins'
+    Tid, Fid = id(builtins.T), id(builtins.F)
+    original_id = builtins.id
+
+    def fake_id(obj):
+        if isinstance(obj, BHA_bool):
+            return Tid if obj else Fid
+        else:
+            return original_id(obj)
+
+    builtins.id = fake_id
+    original_builtins_dict = builtins.__dict__.copy()
+    __builtins__ = ProtectedBuiltinsDict(original_builtins_dict)
+    builtins = __builtins__
+    sys.modules['builtins'] = builtins
+    builtins.name = 'builtins'
