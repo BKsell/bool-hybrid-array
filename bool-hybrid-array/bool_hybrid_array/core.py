@@ -1060,8 +1060,7 @@ def create_mt_xor25_generator():
         def batch_generate(self,n = 1):
             for i in range(n):
                 in_q[i%len(in_q)].put("next")
-            for i in range(n):
-                yield out_q.get()
+            return BHA_Iterator(out_q.get() for i in range(n))
         def getrandbits(self, k: int) -> int:
             if k <= 0:
                 raise ValueError("bits must be positive")
@@ -1101,7 +1100,7 @@ def create_mt_xor25_generator():
         def randint(self, a, b):
             return self.randrange(a, b + 1)
     gen = XOR25_Generator()
-    it = iter(gen)
+    it = BHA_Iterator(iter(gen))
     return gen
 mt_xor25 = create_mt_xor25_generator
 from ._cppiostream import *

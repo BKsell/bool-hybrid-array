@@ -1,9 +1,15 @@
 # BoolHybridArray：高效的布尔混合数组库
 
-<!-- 月下载量（核心推荐）+ 周下载量 + 总下载量 -->
 [![月下载量](https://static.pepy.tech/badge/bool-hybrid-array/month)](https://pepy.tech/project/bool-hybrid-array)
 [![周下载量](https://static.pepy.tech/badge/bool-hybrid-array/week)](https://pepy.tech/project/bool-hybrid-array)
 [![总下载量](https://static.pepy.tech/badge/bool-hybrid-array)](https://pepy.tech/project/bool-hybrid-array)
+[![GitHub Stars](https://img.shields.io/github/stars/BKsell/bool-hybrid-array?style=flat-square&logo=github)](https://github.com/BKsell/bool-hybrid-array)
+[![GitHub Forks](https://img.shields.io/github/forks/BKsell/bool-hybrid-array?style=flat-square&logo=github)](https://github.com/BKsell/bool-hybrid-array)
+[![GitHub License](https://img.shields.io/github/license/BKsell/bool-hybrid-array?style=flat-square)](LICENSE)
+[![PyPI Version](https://img.shields.io/pypi/v/bool-hybrid-array?style=flat-square&logo=pypi)](https://pypi.org/project/bool-hybrid-array/)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/bool-hybrid-array?style=flat-square&logo=pypi)](https://pypi.org/project/bool-hybrid-array/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/bool-hybrid-array?style=flat-square&logo=python)](https://pypi.org/project/bool-hybrid-array/)
+
 
 一个专为布尔值优化的数组类，能够根据数据特征自动在密集存储和稀疏存储模式间切换，兼顾性能和内存效率。
 
@@ -20,11 +26,14 @@
 
 ## 安装方法
 
-使用uv安装：
+使用uv安装（推荐，比pip快）：
 
 ```bash
-
+#如果没有uv先安装uv
 pip install uv
+#先安装cython可选优化（非强制但推荐）
+python -m uv pip install cython
+#然后安装再bool-hybrid-array
 python -m uv pip install bool-hybrid-array
 
 ```
@@ -83,11 +92,19 @@ print(arr3)  # 输出:  BoolHybridArr([False, False, False])；
 * 若遇到 Bug 或有功能建议，可发送邮件至：1289270215@qq.com（更正规）
 * 微信联系：18250730129（注：这是微信绑定的电话号码，优先微信沟通，请勿拨打电话哦）（微信联系回复最快）
 * 抖音（绑定的电话号码同微信）（有讨论群，加入可讨论）
+* 知乎：[贝壳 - 知乎](https://www.zhihu.com/people/50-78-41-74)
+* CSDN：[BKsell-CSDN博客](https://blog.csdn.net/BKsell?spm=1000.2115.3001.5343)
 
-# GitHub仓库
+# 仓库
 
-英文版：[bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
-中文版：[1083175506-bool-hybrid-array](https://www.github-zh.com/projects/1083175506-bool-hybrid-array)
+GitHub仓库英文版：[bool-hybrid-array.git](https://github.com/BKsell/bool-hybrid-array.git)
+GitHub仓库中文镜像：[1083175506-bool-hybrid-array](https://www.github-zh.com/projects/1083175506-bool-hybrid-array)
+
+Gitee仓库：[bool-hybrid-array.git](https://gitee.com/BKsell/bool-hybrid-array.git)
+
+GitCode仓库：[bool-hybrid-array.git](https://atomgit.com/BKsell/bool-hybrid-array.git)
+
+
 
 # 修改元素
 
@@ -701,6 +718,13 @@ cout  << setfill('f') << setw(10) << s << setfill(' ')#输出：fffffftest
 * **9.11.39**：优化性能
 * **9.11.40**：修复一些已知的问题
 * **9.11.41**：修复mt_xor25的bug
+* **9.11.42**：优化性能
+* **9.11.43**：优化性能
+* **9.11.44**：尝试修复无法导入的bug
+* **9.11.45**：尝试修复无法导入的bug*2
+* **9.11.46**：尝试修复无法导入的bug*3
+* **9.11.47**：尝试修复无法导入的bug*4
+* **9.11.48**：尝试修复无法导入的bug*5
 
 
 
@@ -723,7 +747,7 @@ cout  << setfill('f') << setw(10) << s << setfill(' ')#输出：fffffftest
 
 
 ### bool-hybrid-array
-🔥 全网下载130K+，但GitHub星标=0的「神秘Python包」🔥
+🔥 全网下载140K+，但GitHub星标≈0的「神秘Python包」🔥
 
 #### 为啥这么多人下载还没人来GitHub？
 我也不知道😭 可能大家下载完就把我忘了，求各位大佬来看看孩子吧！
