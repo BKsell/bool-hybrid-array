@@ -1,4 +1,4 @@
-# cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, annotation_typing=True, cdivision=True, infer_types=True, auto_super=True
+# cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, annotation_typing=True, cdivision=True, infer_types=True
 from __future__ import annotations
 import inspect
 try:from mypy_extensions import mypyc_attr
@@ -22,7 +22,7 @@ import platform
 import threading
 hybrid_array_cache:weakref.WeakKeyDictionary[BoolHybridArray,int] = weakref.WeakKeyDictionary()
 try:
-    msvcrt = ctypes.CDLL("ucrtbase", use_last_error=True)
+    import msvcrt
     memcpy = msvcrt.memcpy
 except:
     try:

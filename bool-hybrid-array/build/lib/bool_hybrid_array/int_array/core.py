@@ -1,4 +1,3 @@
-# cython: auto_super=True
 from __future__ import annotations
 from collections.abc import Iterable,MutableSet
 from ..core import *
