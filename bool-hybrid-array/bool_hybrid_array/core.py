@@ -10,7 +10,7 @@ import builtins,multiprocessing
 from types import MappingProxyType
 import array,bisect,numpy as np
 from collections.abc import MutableSequence,Iterable,Generator,Iterator,Sequence,Collection
-import itertools,copy,sys,math,weakref,random,mmap,os
+import itertools,copy,sys,math,weakref,random,mmap,os,pathlib,shutil
 from functools import reduce
 import operator,ctypes,gc,abc,types
 from functools import lru_cache
@@ -584,6 +584,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             "是否需要优化": "是" if need_optimize else "否",
             "优化理由/说明": optimize_reason if need_optimize else "当前存储模式已适配数据特征，无需优化"
         }
+    __sizeof__ = memory_usage
     def get_shape(self):
         return (self.size,)
     def __array__(self,dtype = np.bool_,copy = None):
@@ -596,7 +597,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
     def __reduce__(self):
         return BoolHybridArr,((self.large,self.small,self.split_index,self.is_sparse,self.Type,self.hash_,self.size),),
     dequeue = lambda self:self.pop(0)
-    def save(self,path):return Create_BHA(path,self)
+    def save(self,path,*a,**k):return Create_BHA(path,self,*a,**k)
 class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __new__(cls, lst: Iterable = (), is_sparse=None, Type = None, hash_ = True, split_index = None) -> BoolHybridArray:
@@ -790,9 +791,9 @@ class BHA_List(list,metaclass=ResurrectMeta):# type: ignore
     def to_ascii_art(self, width=20):
         art = '\n'.join([' '.join(['■' if j else ' '  for j in i]) for i in self])
         return art
-    def save(self,path):return Create_BHA(path,self)
+    def save(self,path,*a,**k):return Create_BHA(path,self,*a,**k)
     @classmethod
-    def load(path):return Ask_BHA(path)
+    def load(path,*a,**k):return Ask_BHA(path,*a,**k)
 class BHA_Iterator(Iterator,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __init__(self,data):
@@ -1108,6 +1109,158 @@ def create_mt_xor25_generator():
     return gen
 mt_xor25 = create_mt_xor25_generator
 from ._cppiostream import *
+def _bhax_is_bit_set(val) -> bool:
+    s = str(val)
+    return s == '1' or s == 'True' or val is True
+
+
+def _bhax_decode_int_bits(bit_arr, bit_length: int, count: int) -> list:
+    result = []
+    for i in range(count):
+        base = i * bit_length
+        sign = 1 if _bhax_is_bit_set(bit_arr[base]) else 0
+        val = 0
+        for b in range(1, bit_length):
+            if _bhax_is_bit_set(bit_arr[base + b]):
+                val |= (1 << (b - 1))
+        if sign:
+            val = val - (1 << (bit_length - 1))
+        result.append(val)
+    return result
+
+
+class BHAX_Descriptor(metaclass=ResurrectMeta):
+    PIPE_SEP = "|"
+    INNER_SDA = "data0.sda"
+    FLOAT_END_SENTINEL = "@@END_FLOAT@@"
+
+    def __new__(cls, path, *args, **kwargs):
+        root = pathlib.Path(path)
+        inst = super().__new__(cls)
+        inst._root = root
+        return inst
+
+    def __init__(self, path):
+        pass
+
+    def _encode_1d(self, arr) -> list:
+        from .int_array import IntHybridArray
+        from .float_array import FloatHybridArray
+
+        # IntHybridArray 继承自 BoolHybridArray，必须先判断
+        if isinstance(arr, IntHybridArray):
+            total = len(arr)
+            hex_total = f"{total:X}"
+            hex_bitlen = f"{arr.bit_length:X}"
+            b_view = arr.view()
+            hex_data = Ask_arr(b_view).strip()
+            line = self.PIPE_SEP.join(["int", hex_total, hex_bitlen, hex_data])
+            return [line]
+        elif isinstance(arr, BoolHybridArray):
+            total = len(arr)
+            hex_total = f"{total:X}"
+            hex_data = Ask_arr(arr).strip()
+            line = self.PIPE_SEP.join(["bool", hex_total, hex_data])
+            return [line]
+        elif isinstance(arr, FloatHybridArray):
+            total = len(arr)
+            hex_total = f"{total:X}"
+            header_line = self.PIPE_SEP.join(["float", hex_total])
+            lines = [header_line]
+            lines.extend(self._encode_1d(arr.a))
+            lines.extend(self._encode_1d(arr.b))
+            lines.extend(self._encode_1d(arr.lengths))
+            lines.append(self.FLOAT_END_SENTINEL)
+            return lines
+        else:
+            raise TypeError(f"不支持序列化类型: {type(arr)}")
+
+    def _decode_1d(self, lines_iter):
+        from .int_array import IntHybridArray
+        from .float_array import FloatHybridArray
+
+        line = next(lines_iter).strip()
+        parts = line.strip().split(self.PIPE_SEP)
+        typ = parts[0]
+
+        if typ == "bool":
+            _, hex_total, hex_data = parts
+            return temp2(hex_data)
+        elif typ == "int":
+            _, hex_total, hex_bitlen, hex_data = parts
+            elem_cnt = int(hex_total, 16)
+            bit_len = int(hex_bitlen, 16)
+            ba = temp2(hex_data)
+            int_list = _bhax_decode_int_bits(ba, bit_len, elem_cnt)
+            return IntHybridArray(int_list, bit_length=bit_len)
+        elif typ == "float":
+            _hex_total = parts[1]
+            a = self._decode_1d(lines_iter)
+            b = self._decode_1d(lines_iter)
+            lengths = self._decode_1d(lines_iter)
+            sentinel = next(lines_iter).strip()
+            assert sentinel == self.FLOAT_END_SENTINEL
+            fh = FloatHybridArray([])
+            fh.a = a
+            fh.b = b
+            fh.lengths = lengths
+            return fh
+        raise ValueError(f"未知类型标记 {typ}")
+
+    def _write_bha_list(self, data, target_dir: pathlib.Path):
+        target_dir.mkdir(exist_ok=True)
+        for idx, item in enumerate(data):
+            child_dir = target_dir / str(idx)
+            if isinstance(item, BHA_List):
+                self._write_bha_list(item, child_dir)
+            else:
+                child_dir.mkdir(exist_ok=True)
+                sda_file = child_dir / self.INNER_SDA
+                lines = self._encode_1d(item)
+                sda_file.write_text("\n".join(lines), encoding="utf-8")
+
+    def write_data(self, arr):
+        if self._root.exists():
+            shutil.rmtree(self._root)
+        self._root.mkdir()
+        if isinstance(arr, BHA_List):
+            self._write_bha_list(arr, self._root)
+        else:
+            wrapper = BHA_List([arr])
+            self._write_bha_list(wrapper, self._root)
+
+    def _read_bha_list(self, source_dir: pathlib.Path):
+        children = []
+        entries = sorted(
+            source_dir.iterdir(),
+            key=lambda e: int(e.name) if e.name.isdigit() else -1
+        )
+        for entry in entries:
+            if entry.is_dir():
+                if (entry / self.INNER_SDA).exists():
+                    text = (entry / self.INNER_SDA).read_text(encoding="utf-8")
+                    lines_iter = iter([ln for ln in text.splitlines() if ln.strip()])
+                    obj = self._decode_1d(lines_iter)
+                    children.append(obj)
+                else:
+                    sub_list = self._read_bha_list(entry)
+                    children.append(sub_list)
+        return BHA_List(children)
+
+    def read_data(self):
+        if not self._root.exists() or not self._root.is_dir():
+            raise FileNotFoundError(f"BHAX路径不存在: {self._root}")
+        result = self._read_bha_list(self._root)
+        if len(result) == 1 and not isinstance(result[0], BHA_List):
+            return result[0]
+        return result
+
+    @property
+    def root_path(self) -> pathlib.Path:
+        return self._root
+
+    def __repr__(self):
+        return f"<BHAX_Descriptor dataset_root='{self._root}'>"
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
     def __init__(self, *args, protected_names = (("T", "F","Ask_arr","Ask_BHA","Create_BHA","temp2","BHA_Queue","numba_opt","namespace")+tuple(globals())),
                  name = 'builtins', **kwargs):
@@ -1192,7 +1345,9 @@ def temp2():
     return lambda x: BoolHybridArr(__temp1(x))
 temp2 = temp2()
 @BHA_Function
-def Ask_BHA(path):
+def Ask_BHA(path,mode = "BHA"):
+    if mode.lower() == "bhax":
+        return BHAX_Descriptor(path).read_data()
     if not path.lower().endswith('.bha'):
         path += '.bha'
     with open(path, 'a+b') as f:
@@ -1239,7 +1394,9 @@ class BHA_Queue(Collection,metaclass = ResurrectMeta):
     def is_empty(self):
         return not self
 @BHA_Function
-def Create_BHA(path,arr):
+def Create_BHA(path,arr,mode = "BHA"):
+    if mode.lower() == "bhax":
+        BHAX_Descriptor(path).write_data(arr)
     if not path.lower().endswith('.bha'):
         path += '.bha'
     temp = Ask_arr(arr).strip().encode('utf-8')

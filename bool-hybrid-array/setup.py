@@ -79,7 +79,7 @@ finally:
         license="MIT; Supplementary binding terms contained in NOTICE file",
         license_files=["LICENSE", "NOTICE"],
         name="bool-hybrid-array",
-        version="9.11.50",
+        version="9.12.4",
         author="蔡靖杰",
         extras_require={
             "int_array": [],

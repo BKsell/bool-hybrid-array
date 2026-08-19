@@ -403,3 +403,23 @@ with ifstream("test.out") as fin:
 
 cout  << setfill('f') << setw(10) << s#输出：fffffftest
 
+#BHAX_Descriptor（9.12.0版本新增）
+
+desc = BHAX_Descriptor("a.bhax")
+desc.write_data(int_array.IntHybridArray([1, 2, 3]))
+print(desc.read_data())
+
+# 浮点
+desc = BHAX_Descriptor("b.bhax")
+desc.write_data(float_array.FloatHybridArray([1.1, 2.2]))
+data = desc.read_data()
+print(data[0], data[1])
+
+# 多维
+desc = BHAX_Descriptor("c.bhax")
+desc.write_data(BHA_List([
+    BHA_List([int_array.IntHybridArray([1, 2]), int_array.IntHybridArray([3, 4])]),
+    BHA_List([int_array.IntHybridArray([5, 6]), int_array.IntHybridArray([7, 8])]),
+]))
+data = desc.read_data()
+print(data[1][0])  # [5, 6]
