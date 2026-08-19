@@ -1,4 +1,4 @@
-# cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, annotation_typing=True, cdivision=True, infer_types=True, auto_super=True
+# cython: language_level=3,boundscheck=False,wraparound=False,cdivision=True,nonecheck=False,overflowcheck=False,initializedcheck=False,infer_types=True,annotation_typing=True,profile=False,linetrace=False,emit_code_comments=False,c_api_binop_methods=True
 from __future__ import annotations
 import inspect
 try:from mypy_extensions import mypyc_attr
@@ -33,7 +33,7 @@ except:
         memcpy = libc.memcpy
 memcpy.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t)
 memcpy.restype = ctypes.c_void_p
-if 'GenericAlias' in types.__dict__:
+if hasattr(types, 'GenericAlias'):
     _GenericAlias = types.GenericAlias
 class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
@@ -136,8 +136,7 @@ def {name}({params}):
         return cls(dynamic_func)
 class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
-    @mypyc_attr(native_class=False)
-    class _CompactBoolArray(Sequence,Exception):
+    class _CompactBoolArray(Sequence,Exception,metaclass = ResurrectMeta):
         def __init__(self, size: int):
             self.size = size
             self.n_uint8 = (size + 7) >> 3
@@ -595,14 +594,15 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         arr.__dict__ = self.__dict__
         return arr
     def __reduce__(self):
-        return BoolHybridArr,((self.large,self.small,self.split_index,self.is_sparse,self.Type,self.hash_),),
+        return BoolHybridArr,((self.large,self.small,self.split_index,self.is_sparse,self.Type,self.hash_,self.size),),
     dequeue = lambda self:self.pop(0)
+    def save(self,path):return Create_BHA(path,self)
 class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __new__(cls, lst: Iterable = (), is_sparse=None, Type = None, hash_ = True, split_index = None) -> BoolHybridArray:
-        if lst and isinstance(lst,tuple) and isinstance(lst[0],array.array) and isinstance(lst[1],(BoolHybridArray._CompactBoolArray,np.ndarray)):
+        if isinstance(lst,tuple) and len(lst)==6 and isinstance(lst[0],array.array) and isinstance(lst[1],(BoolHybridArray._CompactBoolArray,np.ndarray)):
             arr = TruesArray(0)
-            arr.large,arr.small,arr.split_index,arr.is_sparse,arr.Type,arr.hash_ = lst
+            arr.large,arr.small,arr.split_index,arr.is_sparse,arr.Type,arr.hash_,arr.size = lst
             return arr
         a = isinstance(lst, (Iterator, Generator, map))
         if a:
@@ -721,13 +721,11 @@ class BHA_bool(int,metaclass=ResurrectMeta):# type: ignore
     def __len__(self):
         raise TypeError("'BHA_bool' object has no attribute '__len__'")
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
-@mypyc_attr(native_class=False)
 class BHA_Bool(BHA_bool,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     @lru_cache
     def __new__(cls,v):
         return builtins.T if v else builtins.F
-@mypyc_attr(native_class=False)
 class BHA_List(list,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __init__(self,arr):
@@ -792,15 +790,21 @@ class BHA_List(list,metaclass=ResurrectMeta):# type: ignore
     def to_ascii_art(self, width=20):
         art = '\n'.join([' '.join(['■' if j else ' '  for j in i]) for i in self])
         return art
+    def save(self,path):return Create_BHA(path,self)
+    @classmethod
+    def load(path):return Ask_BHA(path)
 class BHA_Iterator(Iterator,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __init__(self,data):
         self.data,self.copy_data = itertools.tee(iter(data),2)
     def __next__(self):
         try:return next(self.data)
-        except StopIteration as e:
-            self.__init__(self.copy_data)
-            raise e
+        except StopIteration:
+            while 1:
+                try:self.__init__(self.copy_data)
+                except BaseException:continue
+                else:break
+            raise
     def __iter__(self):
         return self
     def __or__(self,other):
@@ -1018,12 +1022,12 @@ def _real_generator(in_q,out_q):
         h3 = hashlib.sha3_512(str(xor_result).encode('utf-8')).digest()
         final = hashlib.md5(h3).hexdigest()
         out_q.put(final)
-@lru_cache
+@lru_cache(None,False)
 def create_mt_xor25_generator():
     """
     MT-XOR25 永久密钥使用规范：
     1. 私钥生成：直接使用MT-XOR25算法输出的哈希值作为永久私钥；
-    2. 公钥推导：无需自定义逻辑，调用UMFS对私钥做哈希，结果即为公钥（SHA-2家族位数越多越安全，512位适配永久密钥场景）：
+    2. 公钥推导：无需自定义逻辑，调用UMFS对私钥做哈希，结果即为公钥：
     public_key = umfs(private_key.encode()).hexdigest()；
     3. 身份验证：
    - 服务端用MT-XOR25生成随机挑战串，下发给用户端；
@@ -1306,17 +1310,7 @@ if inspect.ismodule(builtins):
     builtins.create_mt_xor25_generator = create_mt_xor25_generator
     builtins.BHA_string = BHA_string
     builtins.mt_xor25 = mt_xor25
-
     Tid, Fid = id(builtins.T), id(builtins.F)
-    original_id = builtins.id
-
-    def fake_id(obj):
-        if isinstance(obj, BHA_bool):
-            return Tid if obj else Fid
-        else:
-            return original_id(obj)
-
-    builtins.id = fake_id
     original_builtins_dict = builtins.__dict__.copy()
     __builtins__ = ProtectedBuiltinsDict(original_builtins_dict)
     builtins = __builtins__
