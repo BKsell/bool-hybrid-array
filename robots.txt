@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://bksell.github.io/bool-hybrid-array/sitemap.xml
