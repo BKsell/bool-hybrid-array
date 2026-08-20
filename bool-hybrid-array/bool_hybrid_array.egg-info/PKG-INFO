@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: bool-hybrid-array
-Version: 9.12.4
+Version: 9.12.6
 Summary: 一个高效的布尔数组（密集+稀疏混合存储，节省内存）
 Home-page: https://github.com/BKsell/bool-hybrid-array
 Author: 蔡靖杰
@@ -105,11 +105,10 @@ python -m uv pip install -U bool-hybrid-array
 
 ## 核心特性
 
-* ✅**智能存储模式**：数据量小的位置使用密集存储numpy.ndarray数组，
-* 数据量大的位置为稀疏存储array.array稀疏数组
-* ✅非稀疏模式：数据大部分为非0（True）索引，稀疏区异常值为False
-* ✅稀疏模式：数据大部分为0（False）索引，稀疏区异常值为True
-* ✅BoolHybridArr函数会自动切换
+* ✅**智能存储模式**：索引小的位置使用密集存储numpy.ndarray数组，索引大的位置为稀疏存储array.array稀疏数组
+* ✅**反向稀疏模式**：数据大部分为非0（True）索引，稀疏区异常值为False
+* ✅**稀疏模式**：数据大部分为0（False）索引，稀疏区异常值为True
+* ✅```BoolHybridArr```函数会自动切换
 * ✅**内存高效**：稀疏数据场景下比普通列表节省50%-80%内存
 * ✅**操作便捷**：支持类似列表的索引、切片和赋值操作
 * ✅**快速统计**：内置高效的计数和布尔判断方法
@@ -810,6 +809,8 @@ print(list(data[1][0]))  # [5, 6]
 * **9.12.2**：修复一些已知的问题
 * **9.12.3**：修复9.12.2版本中无法导入的问题
 * **9.12.4**：修复上一个版本只有.whl的错误
+* **9.12.5**：修复了一些已知的问题
+* **9.12.6**：修复了一些已知的问题
 
 
 

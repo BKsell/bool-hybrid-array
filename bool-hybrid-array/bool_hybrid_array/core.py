@@ -10,7 +10,7 @@ import builtins,multiprocessing
 from types import MappingProxyType
 import array,bisect,numpy as np
 from collections.abc import MutableSequence,Iterable,Generator,Iterator,Sequence,Collection
-import itertools,copy,sys,math,weakref,random,mmap,os,pathlib,shutil
+import itertools,copy,sys,math,weakref,random,mmap,os,pathlib,shutil,zipfile
 from functools import reduce
 import operator,ctypes,gc,abc,types
 from functools import lru_cache
@@ -730,12 +730,13 @@ class BHA_Bool(BHA_bool,metaclass=ResurrectMeta):# type: ignore
 class BHA_List(list,metaclass=ResurrectMeta):# type: ignore
     __module__ = 'bool_hybrid_array'
     def __init__(self,arr):
+        from .float_array import FloatHybridArray
         def Temp(v):
             if isinstance(v,(list,tuple)):
                 v = (BoolHybridArr(v) if all(isinstance(i,
                     (bool,BHA_bool,np.bool_)) for i in v)
                      else BHA_List(v))
-            if isinstance(v,BoolHybridArray):
+            if isinstance(v,(BoolHybridArray,FloatHybridArray)):
                 return v
             elif isinstance(v,(bool,np.bool_)):
                 return BHA_Bool(v)
@@ -1147,7 +1148,6 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
         from .int_array import IntHybridArray
         from .float_array import FloatHybridArray
 
-        # IntHybridArray 继承自 BoolHybridArray，必须先判断
         if isinstance(arr, IntHybridArray):
             total = len(arr)
             hex_total = f"{total:X}"
@@ -1170,16 +1170,21 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
             lines.extend(self._encode_1d(arr.a))
             lines.extend(self._encode_1d(arr.b))
             lines.extend(self._encode_1d(arr.lengths))
+            lines.extend(self._encode_1d(arr.signs))
             lines.append(self.FLOAT_END_SENTINEL)
             return lines
         else:
             raise TypeError(f"不支持序列化类型: {type(arr)}")
 
-    def _decode_1d(self, lines_iter):
+    def _decode_1d(self, lines_iter, first_line=None):
         from .int_array import IntHybridArray
         from .float_array import FloatHybridArray
+        from . import BoolHybridArr
 
-        line = next(lines_iter).strip()
+        if first_line is None:
+            line = next(lines_iter).strip()
+        else:
+            line = first_line.strip()
         parts = line.strip().split(self.PIPE_SEP)
         typ = parts[0]
 
@@ -1198,59 +1203,79 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
             a = self._decode_1d(lines_iter)
             b = self._decode_1d(lines_iter)
             lengths = self._decode_1d(lines_iter)
-            sentinel = next(lines_iter).strip()
-            assert sentinel == self.FLOAT_END_SENTINEL
+            # 兼容旧格式：无 signs 数组
+            next_line = next(lines_iter).strip()
+            if next_line == self.FLOAT_END_SENTINEL:
+                signs = BoolHybridArr([bool(a[i] < 0) for i in range(len(a))])
+            else:
+                signs = self._decode_1d(lines_iter, first_line=next_line)
+                sentinel = next(lines_iter).strip()
+                assert sentinel == self.FLOAT_END_SENTINEL
             fh = FloatHybridArray([])
             fh.a = a
             fh.b = b
             fh.lengths = lengths
+            fh.signs = signs
             return fh
         raise ValueError(f"未知类型标记 {typ}")
 
-    def _write_bha_list(self, data, target_dir: pathlib.Path):
-        target_dir.mkdir(exist_ok=True)
+    def _write_bha_list(self, zf, data, prefix: str):
         for idx, item in enumerate(data):
-            child_dir = target_dir / str(idx)
+            path = f"{prefix}{idx}/"
             if isinstance(item, BHA_List):
-                self._write_bha_list(item, child_dir)
+                self._write_bha_list(zf, item, path)
             else:
-                child_dir.mkdir(exist_ok=True)
-                sda_file = child_dir / self.INNER_SDA
                 lines = self._encode_1d(item)
-                sda_file.write_text("\n".join(lines), encoding="utf-8")
+                zf.writestr(f"{path}{self.INNER_SDA}", "\n".join(lines))
 
     def write_data(self, arr):
         if self._root.exists():
-            shutil.rmtree(self._root)
-        self._root.mkdir()
-        if isinstance(arr, BHA_List):
-            self._write_bha_list(arr, self._root)
-        else:
-            wrapper = BHA_List([arr])
-            self._write_bha_list(wrapper, self._root)
+            self._root.unlink()
+        with zipfile.ZipFile(self._root, 'w', zipfile.ZIP_DEFLATED) as zf:
+            if isinstance(arr, BHA_List):
+                self._write_bha_list(zf, arr, "")
+            else:
+                wrapper = BHA_List([arr])
+                self._write_bha_list(zf, wrapper, "")
 
-    def _read_bha_list(self, source_dir: pathlib.Path):
+    def _read_bha_list(self, zf, prefix: str):
+        names = zf.namelist()
+        sub_indices = set()
+        for name in names:
+            if name.startswith(prefix):
+                rest = name[len(prefix):]
+                if '/' in rest:
+                    idx = rest.split('/')[0]
+                    if idx.isdigit():
+                        sub_indices.add(int(idx))
         children = []
-        entries = sorted(
-            source_dir.iterdir(),
-            key=lambda e: int(e.name) if e.name.isdigit() else -1
-        )
-        for entry in entries:
-            if entry.is_dir():
-                if (entry / self.INNER_SDA).exists():
-                    text = (entry / self.INNER_SDA).read_text(encoding="utf-8")
-                    lines_iter = iter([ln for ln in text.splitlines() if ln.strip()])
-                    obj = self._decode_1d(lines_iter)
-                    children.append(obj)
-                else:
-                    sub_list = self._read_bha_list(entry)
-                    children.append(sub_list)
+        for idx in sorted(sub_indices):
+            child_prefix = f"{prefix}{idx}/"
+            sda_path = f"{child_prefix}{self.INNER_SDA}"
+            if sda_path in names:
+                text = zf.read(sda_path).decode('utf-8')
+                lines_iter = iter([ln for ln in text.splitlines() if ln.strip()])
+                obj = self._decode_1d(lines_iter)
+                children.append(obj)
+            else:
+                sub_list = self._read_bha_list(zf, child_prefix)
+                children.append(sub_list)
         return BHA_List(children)
 
     def read_data(self):
-        if not self._root.exists() or not self._root.is_dir():
+        if not self._root.exists():
             raise FileNotFoundError(f"BHAX路径不存在: {self._root}")
-        result = self._read_bha_list(self._root)
+        fd = os.open(self._root, os.O_RDONLY)
+        try:
+            size = os.fstat(fd).st_size
+            mm = mmap.mmap(fd, size, access=mmap.ACCESS_READ)
+            try:
+                with zipfile.ZipFile(mm) as zf:
+                    result = self._read_bha_list(zf, "")
+            finally:
+                mm.close()
+        finally:
+            os.close(fd)
         if len(result) == 1 and not isinstance(result[0], BHA_List):
             return result[0]
         return result

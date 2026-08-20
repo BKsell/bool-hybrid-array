@@ -48,11 +48,10 @@ python -m uv pip install -U bool-hybrid-array
 
 ## 核心特性
 
-* ✅**智能存储模式**：数据量小的位置使用密集存储numpy.ndarray数组，
-* 数据量大的位置为稀疏存储array.array稀疏数组
-* ✅非稀疏模式：数据大部分为非0（True）索引，稀疏区异常值为False
-* ✅稀疏模式：数据大部分为0（False）索引，稀疏区异常值为True
-* ✅BoolHybridArr函数会自动切换
+* ✅**智能存储模式**：索引小的位置使用密集存储numpy.ndarray数组，索引大的位置为稀疏存储array.array稀疏数组
+* ✅**反向稀疏模式**：数据大部分为非0（True）索引，稀疏区异常值为False
+* ✅**稀疏模式**：数据大部分为0（False）索引，稀疏区异常值为True
+* ✅```BoolHybridArr```函数会自动切换
 * ✅**内存高效**：稀疏数据场景下比普通列表节省50%-80%内存
 * ✅**操作便捷**：支持类似列表的索引、切片和赋值操作
 * ✅**快速统计**：内置高效的计数和布尔判断方法
@@ -513,6 +512,27 @@ with ifstream("test.out") as fin:
 
 cout  << setfill('f') << setw(10) << s << setfill(' ')#输出：fffffftest
 
+#BHAX_Descriptor（9.12.0版本新增）
+
+desc = BHAX_Descriptor("a.bhax")
+desc.write_data(int_array.IntHybridArray([1, 2, 3]))
+print(list(desc.read_data()))
+
+# 浮点
+desc = BHAX_Descriptor("b.bhax")
+desc.write_data(float_array.FloatHybridArray([1.1, 2.2]))
+data = desc.read_data()
+print(data[0], data[1])
+
+# 多维
+desc = BHAX_Descriptor("c.bhax")
+desc.write_data(BHA_List([
+    BHA_List([int_array.IntHybridArray([1, 2]), int_array.IntHybridArray([3, 4])]),
+    BHA_List([int_array.IntHybridArray([5, 6]), int_array.IntHybridArray([7, 8])]),
+]))
+data = desc.read_data()
+print(list(data[1][0]))  # [5, 6]
+
 
 
 ```
@@ -727,6 +747,13 @@ cout  << setfill('f') << setw(10) << s << setfill(' ')#输出：fffffftest
 * **9.11.48**：尝试修复无法导入的bug*5
 * **9.11.49**：修复序列化的bug，新增BHA_List.load和save方法
 * **9.11.50**：修复上一个版本只有.whl的错误
+* **9.12.0**：新增BHAX_Descriptor
+* **9.12.1**：修复文档的错误
+* **9.12.2**：修复一些已知的问题
+* **9.12.3**：修复9.12.2版本中无法导入的问题
+* **9.12.4**：修复上一个版本只有.whl的错误
+* **9.12.5**：修复了一些已知的问题
+* **9.12.6**：修复了一些已知的问题
 
 
 
