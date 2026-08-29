@@ -1083,8 +1083,9 @@ def create_mt_xor25_generator():
                     break
             return res
         def uniform(self, low: float = 0.0, high: float = 1.0) -> float:
+            from .float_array import BHA_Float
             r = self.getrandbits(1024)
-            return low + (high - low) * r / (1 << 1024)
+            return low + (BHA_Float(high) - low) * r / (1 << 1024)
         def randrange(self, start, stop=None, step=1):
             if stop is None:
                 stop, start = start, 0
@@ -1286,6 +1287,7 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
 
     def __repr__(self):
         return f"<BHAX_Descriptor dataset_root='{self._root}'>"
+
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
     def __init__(self, *args, protected_names = (("T", "F","Ask_arr","Ask_BHA","Create_BHA","temp2","BHA_Queue","numba_opt","namespace")+tuple(globals())),
                  name = 'builtins', **kwargs):
@@ -1391,14 +1393,15 @@ def Ask_BHA(path,mode = "BHA"):
         if len(temp) == 1:
             return temp[0]
         return temp
-class BHA_Queue(Collection,metaclass = ResurrectMeta):
-    def __init__(self,data = (),*a,**k):
-        self.a = BoolHybridArr(data,*a,**k)
-        self.b = BoolHybridArr([],*a,**k)
+
+class BHA_Queue(Collection, metaclass=ResurrectMeta):
+    def __init__(self, data=(), *a, **k):
+        self.a = BoolHybridArr(data, *a, **k)
+        self.b = BoolHybridArr([], *a,**k)
     def __str__(self):
         return f"BHA_Queue([{','.join(itertools.chain(map(str,reversed(self.b)),map(str,self.a)))}])"
     __repr__ = __str__
-    def enqueue(self,v):
+    def enqueue(self, v):
         self.a.push(v)
     def dequeue(self):
         if self.b:
@@ -1415,9 +1418,23 @@ class BHA_Queue(Collection,metaclass = ResurrectMeta):
         yield from reversed(self.b)
         yield from self.a
     def __len__(self):
-        return len(self.a)+len(self.b)
+        return len(self.a) + len(self.b)
     def is_empty(self):
         return not self
+    put = append = enqueue
+    get = popleft = dequeue
+    def appendleft(self, v):
+        self.b.push(v)
+    def pop(self):
+        if self.a:
+            return self.a.pop()
+        if self.b:
+            Type = self.a.Type
+            self.a = BoolHybridArr(reversed(self.b))
+            self.a.Type = Type
+            self.b.clear()
+            return self.a.pop()
+        raise IndexError("无法从空的 BHA_Queue 队列执行出队操作")
 @BHA_Function
 def Create_BHA(path,arr,mode = "BHA"):
     if mode.lower() == "bhax":

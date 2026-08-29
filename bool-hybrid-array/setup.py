@@ -76,7 +76,7 @@ finally:
             sys.exit(f"\033[31m❌ 错误：bool-hybrid-array 要求 PyPy≥7.3.10，当前版本 {pypy_ver}\033[0m")
 
     setup(
-        license="MIT; Supplementary binding terms contained in NOTICE file",
+        license="Apache-2.0",
         license_files=["LICENSE", "NOTICE"],
         name="bool-hybrid-array",
         version="9.12.6",
@@ -108,7 +108,7 @@ finally:
             "Programming Language :: Python :: 3 :: Only",
             'Programming Language :: Python :: Implementation :: CPython',
             'Programming Language :: Python :: Implementation :: PyPy',
-            "License :: OSI Approved :: MIT License",
+            "License :: OSI Approved :: Apache-2.0 License",
             "Operating System :: OS Independent",
         ],
         keywords="boolean array, compact storage",
