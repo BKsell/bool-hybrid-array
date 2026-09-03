@@ -76,10 +76,10 @@ finally:
             sys.exit(f"\033[31m❌ 错误：bool-hybrid-array 要求 PyPy≥7.3.10，当前版本 {pypy_ver}\033[0m")
 
     setup(
-        license="Apache-2.0",
-        license_files=["LICENSE", "NOTICE"],
+        license="Apache-2.0 OR MulanPSL-2.0",
+        license_files=["LICENSE", "NOTICE", "LICENSE‑MulanPSL2"],
         name="bool-hybrid-array",
-        version="9.12.6",
+        version="9.12.9",
         author="蔡靖杰",
         extras_require={
             "int_array": [],
@@ -108,16 +108,16 @@ finally:
             "Programming Language :: Python :: 3 :: Only",
             'Programming Language :: Python :: Implementation :: CPython',
             'Programming Language :: Python :: Implementation :: PyPy',
-            "License :: OSI Approved :: Apache-2.0 License",
+            "License :: OSI Approved :: Apache Software License",
             "Operating System :: OS Independent",
         ],
         keywords="boolean array, compact storage",
         package_data={
-            "": ["README.md", "LICENSE", "NOTICE", 'temp.py', 'temp.cmd', 'BHA_Opener.7z'],
+            "": ["README.md", "LICENSE", "NOTICE", "LICENSE‑MulanPSL2" , 'temp.py', 'temp.cmd', 'BHA_Opener.7z'],
             "bool_hybrid_array": ["*.py", "*.pyd", "*.c", "*"],
-            r"bool_hybrid_array\__pycache__": ['*.pyc'],
-            r"bool_hybrid_array\int_array": ["*.py", "*.pyd", "*.c", "*"],
-            r"bool_hybrid_array\float_array": ["*.py", "*.pyd", "*.c", "*"]
+            "bool_hybrid_array/__pycache__": ['*.pyc'],
+            "bool_hybrid_array/int_array": ["*.py", "*.pyd", "*.c", "*"],
+            "bool_hybrid_array/float_array": ["*.py", "*.pyd", "*.c", "*"]
         },
         include_package_data=True,
         url="https://github.com/BKsell/bool-hybrid-array",

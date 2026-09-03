@@ -22,17 +22,16 @@ import platform
 import threading
 hybrid_array_cache:weakref.WeakKeyDictionary[BoolHybridArray,int] = weakref.WeakKeyDictionary()
 try:
-    msvcrt = ctypes.CDLL("ucrtbase", use_last_error=True)
+    msvcrt = ctypes.CDLL("msvcrt.dll")
     memcpy = msvcrt.memcpy
 except:
     try:
         libc = ctypes.CDLL('libc.so.6')
-        memcpy = libc.memcpy
     except:
         libc = ctypes.CDLL('libc.so')
-        memcpy = libc.memcpy
-memcpy.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t)
+    memcpy = libc.memcpy
 memcpy.restype = ctypes.c_void_p
+memcpy.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t)
 if hasattr(types, 'GenericAlias'):
     _GenericAlias = types.GenericAlias
 class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):# type: ignore
@@ -134,13 +133,37 @@ def {name}({params}):
         exec(func_code, globals(), local_namespace)
         dynamic_func = local_namespace[name]
         return cls(dynamic_func)
-class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type: ignore
+class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
-    class _CompactBoolArray(Sequence,Exception,metaclass = ResurrectMeta):
+    class _CompactBoolArray(MutableSequence,Exception,metaclass = ResurrectMeta):
         def __init__(self, size: int):
             self.size = size
             self.n_uint8 = (size + 7) >> 3
-            self.data = np.zeros(self.n_uint8, dtype=np.uint8)# type: ignore[assignment]
+            self.data = np.zeros(self.n_uint8, dtype=np.uint8)
+
+        def _real_capacity(self) -> int:
+            return len(self.data) << 3
+
+        def _resize_capacity(self, want_bit_count:int):
+            if want_bit_count <= self._real_capacity():
+                return
+            old_cap_bit = self._real_capacity()
+            new_cap_bit = int(old_cap_bit ** 1.01981 * 1.3654 + 94)
+            new_n_uint8 = (max(new_cap_bit, want_bit_count) +7) >>3
+            self.data = np.pad(self.data, (0, new_n_uint8 - len(self.data)), mode='constant', constant_values=0)
+
+        def _set_single(self, index: int, value: bool, ctypes_arr):
+            uint8_pos = index >> 3
+            bit_offset = index & 7
+            ctypes_arr[uint8_pos] &= ~(1 << bit_offset) & 0xFF
+            if value:
+                ctypes_arr[uint8_pos] |= (1 << bit_offset)
+
+        def _get_single(self, index:int) -> bool:
+            uint8_pos = index >> 3
+            bit_offset = index & 7
+            return bool((self.data[uint8_pos] >> bit_offset) & 1)
+
         def __setitem__(self, index: int | slice, value: Any):
             ctypes_arr = self.data.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
             if isinstance(index, slice):
@@ -155,45 +178,76 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
                     val_bool = bool(value)
                     for i in indices:
                         self._set_single(i, val_bool, ctypes_arr)
-                self.data = np.ctypeslib.as_array(ctypes_arr, shape=(self.n_uint8,))
+                self.data = np.ctypeslib.as_array(ctypes_arr, shape=(len(self.data),))
                 return
             if not (0 <= index < self.size):
                 raise IndexError(f"密集区索引 {index} 超出范围 [0, {self.size})")
             self._set_single(index, bool(value), ctypes_arr)
-            self.data = np.ctypeslib.as_array(ctypes_arr, shape=(self.n_uint8,))
+            self.data = np.ctypeslib.as_array(ctypes_arr, shape=(len(self.data),))
             self.data = self.data.view()
-        def _set_single(self, index: int, value: bool, ctypes_arr):
-            uint8_pos = index >> 3
-            bit_offset = index & 7
-            ctypes_arr[uint8_pos] &= ~(1 << bit_offset) & 0xFF
-            if value:
-                ctypes_arr[uint8_pos] |= (1 << bit_offset)
 
         def __getitem__(self, index: int | slice) -> bool | list[bool]:
             if isinstance(index, slice):
                 start, stop, step = index.indices(self.size)
                 result = []
                 for i in range(start, stop, step):
-                    uint8_pos = i >> 3
-                    bit_offset = i & 7
-                    result.append(bool((self.data[uint8_pos] >> bit_offset) & 1))
+                    result.append(self._get_single(i))
                 return result
             if not (0 <= index < self.size):
                 raise IndexError(f"密集区索引 {index} 超出范围 [0, {self.size})")
-            uint8_pos = index >> 3
-            bit_offset = index & 7
-            return bool((self.data[uint8_pos] >> bit_offset) & 1)
+            return self._get_single(index)
+
         def __len__(self):
             return self.size
+
         def set_all(self, value: bool):
             ctypes_arr = self.data.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
             length = len(self.data)
             if value:ctypes.memset(ctypes_arr, 0xff, length)
             else:ctypes.memset(ctypes_arr, 0, length)
+
         def copy(self):
             new_instance = self.__class__(size=self.size)
             new_instance.data = self.data.copy()
             return new_instance
+
+        def insert(self, idx:int, value:bool):
+            idx = max(0, min(idx, self.size))
+            need_bits = self.size + 1
+            self._resize_capacity(need_bits)
+            ctypes_arr = self.data.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
+            for i in range(self.size -1, idx -1, -1):
+                src_bit = self._get_single(i)
+                self._set_single(i+1, src_bit, ctypes_arr)
+            self._set_single(idx, bool(value), ctypes_arr)
+            self.size +=1
+            self.data = np.ctypeslib.as_array(ctypes_arr, shape=(len(self.data),))
+
+        def pop(self, idx:int = -1) -> bool:
+            if self.size <=0:
+                raise IndexError("pop from empty _CompactBoolArray")
+            idx = idx if idx >=0 else idx + self.size
+            if not (0 <= idx < self.size):
+                raise IndexError("pop index out of range")
+            val = self._get_single(idx)
+            ctypes_arr = self.data.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
+            for i in range(idx, self.size -1):
+                src_bit = self._get_single(i+1)
+                self._set_single(i, src_bit, ctypes_arr)
+            self.size -=1
+            self.data = np.ctypeslib.as_array(ctypes_arr, shape=(len(self.data),))
+            return val
+
+        def __delitem__(self, key:int|slice):
+            if isinstance(key, slice):
+                start, stop, step = key.indices(self.size)
+                indices = list(range(start, stop, step))
+                for pos in reversed(indices):
+                    self.pop(pos)
+                return
+            idx = key if key >=0 else key + self.size
+            self.pop(idx)
+
     def __init__(self, split_index: int, size=None, is_sparse=False ,Type:Callable = None,hash_:Any = True) -> None:
         self.Type = Type if Type is not None else builtins.BHA_Bool
         self.split_index = int(split_index)
@@ -217,16 +271,20 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         new_hash = id(self)
         self._cached_hash = new_hash
         hybrid_array_cache[self] = new_hash
+
     def __call__(self, func):
         func.self = self
         def wrapper(*args, **kwargs):
             return func(self, *args, **kwargs)
         setattr(self, func.__name__, wrapper)
         return func
+
     def resize(size):
         self.size = size
+
     def __hash__(self):
         return self._cached_hash
+
     def accessor(self, i: int, value: Any = None) -> Any:
         def _get_sparse_info(index: int) -> tuple[int, bool]:
             pos = bisect.bisect_left(self.large, index)
@@ -251,11 +309,11 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
                     if pos < len(self.large):
                         del self.large[pos]
                 return None
+
     @overload
     def __getitem__(self, idx: int, /) -> Any: ...
     @overload
     def __getitem__(self, idx: slice, /) -> list: ...
-
     def __getitem__(self, key:int|slice = -1,/) -> Any:
         if isinstance(key, slice):
             start, stop, step = key.indices(self.size)
@@ -264,6 +322,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         if 0 <= key < self.size:
             return self.Type(self.accessor(key))
         raise IndexError("索引超出范围")
+
     def __setitem__(self, key: int | slice, value:Any) -> None:
         if isinstance(key, int):
             adjusted_key = key if key >= 0 else key + self.size
@@ -276,6 +335,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             start, stop, step = key.indices(original_size)
             value_list = list(value)
             new_len = len(value_list)
+            slice_span = max(0, stop - start)
             if step != 1:
                 slice_indices = range(start, stop, step)
                 if new_len != len(slice_indices):
@@ -283,44 +343,48 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
                 for i, val in zip(slice_indices, value_list):
                     self[i] = val
                 return
-            if new_len == max(0, stop - start):
-                for v,i in zip(value_list,range(start,stop)):
-                    self[i] = v
+            if new_len == slice_span:
+                for offset, val in enumerate(value_list):
+                    self[start + offset] = val
                 return
-            for i in range(stop - 1, start - 1, -1):
-                if i <= self.split_index:
-                    if i >= len(self.small):
-                        self.small = np.pad(
-                            self.small, 
-                            (0, i - len(self.small) + 1),
-                            constant_values=not self.is_sparse
-                        )
-                del self[i]
-            for idx, val in enumerate(value_list):
-                self.insert(start + idx, bool(val))
+            delta = new_len - slice_span
+            common = min(new_len, slice_span)
+            for offset in range(common):
+                self[start + offset] = value_list[offset]
+            if delta < 0:
+                del_start = start + common
+                del_end = del_start + (-delta)
+                for i in range(del_end -1, del_start -1, -1):
+                    del self[i]
+            else:
+                for offset in range(common, new_len):
+                    self.insert(start + offset, value_list[offset])
             return
         raise TypeError("索引必须是整数或切片")
+
     def __repr__(self) -> str:
         return(f"BoolHybridArray(split_index={self.split_index}, size={self.size}, "
         +f"is_sparse={self.is_sparse}, small_len={len(self.small)}, large_len={len(self.large)})")
+
     @overload
     def __delitem__(self, key: int, /) -> None: ...
     @overload
     def __delitem__(self, key: slice, /) -> None: ...
-
     def __delitem__(self, key: int|slice = -1,/) -> None:
         key = key if key >= 0 else key + self.size
         if isinstance(key, slice):
             start, stop, step = key.indices(self.size)
-            for i in range(start,stop,step):del self[i]
+            for i in reversed(range(start,stop,step)):
+                del self[i]
+            return
         if not (0 <= key < self.size):
             raise IndexError(f"索引 {key} 超出范围 [0, {self.size})")
+
         if key <= self.split_index:
-            if key >= len(self.small):
-                raise IndexError(f"小索引 {key} 超出small数组范围（长度{len(self.small)}）")
-            self.small = np.delete(self.small, key)# type: ignore[assignment]
-            self.small = np.append(self.small, not self.is_sparse)# type: ignore[assignment]
-            self.split_index -= min(self.split_index, len(self.small) - 1)
+            self.small.pop(key)
+            self.split_index = max(-1, self.split_index - 1)
+            for i in range(len(self.large)):
+                self.large[i] -= 1
         else:
             pos = bisect.bisect_left(self.large, key)
             if pos < len(self.large) and self.large[pos] == key:
@@ -329,24 +393,24 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             for i in range(adjust_pos, len(self.large)):
                 self.large[i] -= 1
         self.size -= 1
+
     def __str__(self) -> str:
         return f"BoolHybridArr([{','.join(map(str,self))}])"
+
     def __reversed__(self):
         if not self:return BHA_Iterator([])
         return BHA_Iterator(map(self.__getitem__,range(self.size-1,-1,-1)))
+
     def insert(self, key: int, value: Any) -> None:
         value = bool(value)
         key = key if key >= 0 else key + self.size
         key = max(0, min(key, self.size))
         if key <= self.split_index:
-            if key > len(self.small):
-                self.small = np.pad(
-                    self.small, 
-                    (0, key - len(self.small) + 1),
-                    constant_values=not self.is_sparse
-                )
-            self.small = np.insert(self.small, key, value)# type: ignore[assignment]
+            self.small.insert(key, value)
+            old_split = self.split_index
             self.split_index = min(self.split_index + 1, len(self.small) - 1)
+            for i in range(len(self.large)):
+                self.large[i] += 1
         else:
             pos = bisect.bisect_right(self.large, key)
             for i in range(pos, len(self.large)):
@@ -354,13 +418,17 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             if (self.is_sparse and value) or (not self.is_sparse and not value):
                 self.large.insert(pos, key)
         self.size += 1
+
     def __len__(self) -> int:
         return int(self.size)
+
     def __iter__(self):
         if not self:return BHA_Iterator([])
         return BHA_Iterator(map(self.__getitem__,itertools.takewhile(lambda x: x < self.size, itertools.count(0))))
+
     def __next__(self):
         return next(self.generator)
+
     def __contains__(self, value:Any) -> bool:
         if not isinstance(value, (bool,np.bool_,self.Type,BHA_bool)):return False
         if not self.size:return False
@@ -372,20 +440,26 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             return self.large or b
         else:
             return len(self.large) == self.size-self.split_index-1 or b
+
     def __bool__(self) -> bool:
         return bool(self.size)
+
     def __any__(self):
         return builtins.T in self
+
     def __all__(self):
         return builtins.F not in self
+
     def __eq__(self, other) -> bool:
         if not isinstance(other, (BoolHybridArray, list, tuple, np.ndarray, array.array)):
             return False
         if len(self) != len(other):
             return False
         return all(a == b for a, b in zip(self, other))
+
     def __ne__(self, other) -> bool:
         return not self == other
+
     def __and__(self, other) -> BoolHybridArray:
         if type(other) == int:
             other = abs(other)
@@ -398,21 +472,26 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         if not self.size:
             return 0
         return reduce(lambda acc, val: operator.or_(operator.lshift(acc, 1), int(val)),self,0)
+
     def __or__(self, other) -> BoolHybridArray:
         if type(other) == int:
+            other = abs(other)
             other = bin(other)[2:]
         if self.size != len(other):
             raise ValueError(f"或运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.or_, self, other),hash_ = self.hash_)
+
     def __ror__(self, other) -> BoolHybridArray:
         if type(other) == int:
             other = abs(other)
             other = bin(other)[2:]
         return self | other
+
     def __rshift__(self, other) -> BoolHybridArray:
         arr = BoolHybridArr(self)
         arr >>= other
         return arr
+
     def __irshift__(self, other) -> BoolHybridArray:
         if int(other) < 0:
             self <<= -other
@@ -422,6 +501,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
                 return self
             self.pop(-1)
         return self
+
     def __ilshift__(self ,other) -> BoolHybridArray:
         if int(other) < 0:
             self >>= -other
@@ -431,42 +511,53 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         else:
             self.size += int(other)
         return self
+
     def __lshift__(self ,other) -> BoolHybridArray:
         if int(other) < 0:
             return self >> -other
         return self+FalsesArray(int(other))
+
     def __add__(self, other) -> BoolHybridArray:
         arr = self.copy()
         arr += other
         arr.optimize()
         return arr
+
     def __rand__(self, other) -> BoolHybridArray:
         if type(other) == int:
             other = bin(other)[2:]
         return self & other
+
     def __xor__(self, other) -> BoolHybridArray:
         if len(self) != len(other):
             raise ValueError(f"异或运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.xor, self, other),hash_ = self.hash_)
+
     def __gt__(self,other):
         if self.size!=len(other):
             return self.size>len(other)
         return any(map(operator.gt,self,other))
+
     def __lt__(self,other):
         if self.size!=len(other):
             return self.size<len(other)
         return any(map(operator.lt,self,other))
+
     def __rxor__(self, other) -> BoolHybridArray:
         return self^other
+
     def __invert__(self) -> BoolHybridArray:
         return BoolHybridArr(not a for a in self)
+
     def copy(self) -> BoolHybridArray:
         arr = BoolHybridArray(split_index = self.split_index,size = self.size)
         arr.large,arr.small,arr.split_index,arr.is_sparse,arr.Type,arr.size = (array.array(self.large.typecode, self.large),self.small.copy(),
         self.split_index,BHA_Bool(self.is_sparse),self.Type,self.size)
         return arr
+
     def __copy__(self) -> BoolHybridArray:
         return self.copy()
+
     def __mul__(self, arr2):
         len1, len2 = len(self), len(arr2)
         result = FalsesArray(len1 + len2)
@@ -495,9 +586,11 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         if start_idx == len(result):
             return FalsesArray(1)
         return result[start_idx:]
+
     def find(self,value):
         from .int_array import IntHybridArray
         return IntHybridArray([i for i in range(len(self)) if self[i]==value])
+
     def extend(self, iterable:Iterable) -> None:
         if isinstance(iterable, (Iterator, Generator, map)):
             iterable,copy = itertools.tee(iterable, 2)
@@ -507,15 +600,18 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         self.size += len_
         for i,j in zip(range(len_),iterable):
             self[-i-1] = j
+
     def append(self,v):
         self.size += 1
         self[-1] = v
+
     push = append
     peek = __getitem__
     top = property(peek)
     front = property(lambda self:self[0])
     rear = top
     enqueue = push
+
     def index(self, value) -> int:
         if self.size == 0:
             raise ValueError('无法在空的 BoolHybridArray 中查找元素！')
@@ -531,6 +627,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         if x != 'not find':
             return x
         raise ValueError(f"{value} not in BoolHybridArray")
+
     def rindex(self, value) -> int:
         if self.size == 0:
             raise ValueError('无法在空的 BoolHybridArray 中查找元素！')
@@ -546,35 +643,76 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
         if x != 'not find':
             return x
         raise ValueError(f"{value} not in BoolHybridArray")
+
     def count(self, value) -> int:
         value = bool(value)
         return sum(v == value for v in self)
+
     def optimize(self,*a,**k) -> BoolHybridArray:
         arr = BoolHybridArr(self,*a,**k)
         self.large,self.small,self.split_index,self.is_sparse = (arr.large,arr.small,
         arr.split_index,arr.is_sparse)
         gc.collect()
         return self
+
     def memory_usage(self, detail=False) -> dict | int:
-        small_mem = self.small.size // 8 + 32
-        large_mem = len(self.large) * 4 + 32
+        small_mem = (self.small.size >>3) + 32
+        large_mem = (len(self.large) << 2) + 32
         equivalent_list_mem = 40 + 8 * self.size
         equivalent_numpy_mem = 96 + self.size
         total = small_mem+large_mem
         if not detail:
             return total
+
         need_optimize = False
         optimize_reason = ""
-        sparse_ratio = len(self.large) / max(len(self), 1)
-        if sparse_ratio > 0.4 and len(self) > 500:  # 阈值可根据测试调整
+        n = self.size
+        if n <= 0:
+            return {
+                "总占用(字节)": total,
+                "密集区占用": small_mem,
+                "稀疏区占用": large_mem,
+                "对比原生list节省": "100.000000%",
+                "对比numpy节省": "N/A",
+                "是否需要优化": "否",
+                "优化理由/说明": "数组为空"
+            }
+        win_sz = min(256, n)
+        max_sample_points = 2048
+        step = max(1, n // (max_sample_points // win_sz))
+        max_density = 0.0
+        min_density = 1.0
+        sample_cnt = 0
+        for start in range(0, n - win_sz +1, step):
+            cnt = 0
+            for pos in range(start, start+win_sz):
+                cnt += 1 if bool(self[pos]) else 0
+            dens = cnt / win_sz
+            max_density = max(max_density, dens)
+            min_density = min(min_density, dens)
+            sample_cnt += win_sz
+            if sample_cnt >= max_sample_points:
+                break
+        sample_total = min(n, 512)
+        total_true = sum(1 for idx in range(0,n,n//sample_total if n>sample_total else 1) if bool(self[idx]))
+        global_density = total_true / sample_total
+
+        entry_bytes = 4 if n < (1<<32) else 8
+        cost_dense = (n +7)//8 + 32
+        cost_sparse = int(global_density * n)* entry_bytes + 32
+
+        if cost_sparse > cost_dense * 1.25:
             need_optimize = True
-            optimize_reason = "稀疏区索引密度过高，优化后可转为密集存储提升速度"
-        elif len(self) < 32 and total > len(self):
+            optimize_reason = f"O(1)采样评估(全局{global_density:.3f},窗口max={max_density:.3f},min={min_density:.3f})，稀疏存储开销显著高于位密集存储，建议转密集模式"
+        elif cost_dense > cost_sparse *1.25:
             need_optimize = True
-            optimize_reason = "小尺寸数组存储冗余，优化后将用int位存储进一步省内存"
-        elif np.count_nonzero(np.array(self.small)) / max(len(self.small), 1) < 0.05 and len(self) > 1000:
+            optimize_reason = f"O(1)采样评估(全局{global_density:.3f},窗口max={max_density:.3f},min={min_density:.3f})，位密集存储开销显著高于稀疏索引，建议转稀疏模式"
+        elif n <32 and total > n:
             need_optimize = True
-            optimize_reason = "密集区有效值占比过低，优化后可转为稀疏存储节省内存"
+            optimize_reason = "小尺寸数组存储冗余，可进一步压缩"
+        else:
+            optimize_reason = "O(1)采样密度评估完成，当前存储模式匹配数据分布，无需优化"
+
         return {
             "总占用(字节)": total,
             "密集区占用": small_mem,
@@ -582,23 +720,30 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):# type:
             "对比原生list节省": f"{(1 - total/equivalent_list_mem)*100:.6f}%",
             "对比numpy节省": f"{(1 - total/equivalent_numpy_mem)*100:.6f}%" if equivalent_numpy_mem > 0 else "N/A",
             "是否需要优化": "是" if need_optimize else "否",
-            "优化理由/说明": optimize_reason if need_optimize else "当前存储模式已适配数据特征，无需优化"
+            "优化理由/说明": optimize_reason
         }
+
     __sizeof__ = memory_usage
+
     def get_shape(self):
         return (self.size,)
+
     def __array__(self,dtype = np.bool_,copy = None):
         arr = np.fromiter(map(np.bool_,self), dtype=dtype)
         return arr.copy() if copy else arr.view()
+
     def view(self):
         arr = TruesArray(0)
         arr.__dict__ = self.__dict__
         return arr
+
     def __reduce__(self):
         return BoolHybridArr,((self.large,self.small,self.split_index,self.is_sparse,self.Type,self.hash_,self.size),),
+
     dequeue = lambda self:self.pop(0)
     def save(self,path,*a,**k):return Create_BHA(path,self,*a,**k)
-class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):# type: ignore
+
+class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     def __new__(cls, lst: Iterable = (), is_sparse=None, Type = None, hash_ = True, split_index = None) -> BoolHybridArray:
         if isinstance(lst,tuple) and len(lst)==6 and isinstance(lst[0],array.array) and isinstance(lst[1],(BoolHybridArray._CompactBoolArray,np.ndarray)):
@@ -677,6 +822,7 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):# type: ignore
         arr._cached_hash = new_hash
         hybrid_array_cache[arr] = new_hash
         return arr
+
 def TruesArray(size, Type = None, hash_ = True):
     split_index = min(size >> 4, math.isqrt(size))
     split_index = max(split_index, 1)

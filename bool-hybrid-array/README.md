@@ -755,6 +755,7 @@ print(list(data[1][0]))  # [5, 6]
 * **9.12.5**：修复了一些已知的问题
 * **9.12.6**：修复了一些已知的问题
 * **9.12.7**：新增BHA_Queue的put、get、pop、popleft、append、appendleft方法
+* **9.12.9**：优化性能，修复大量上古bug
 
 
 
@@ -794,4 +795,22 @@ print(list(data[1][0]))  # [5, 6]
 
 ## 许可证
 
-本项目采用**自9.12.7版本开始采用Apache-2.0许可证**，详情参见**LICENSE文件**。
+本项目采用**自9.12.7版本开始采用Apache-2.0许可证**，详情参见**`LICENSE`**文件。
+
+```
+   Copyright 2026 蔡靖杰
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+```
+
+**9.12.8 版本起**使用者也可选择 **MulanPSL‑2.0**，详情参见**`LICENSE‑MulanPSL2`**文件
