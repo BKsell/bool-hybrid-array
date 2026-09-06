@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: bool-hybrid-array
-Version: 9.12.8
+Version: 9.12.11
 Summary: 一个高效的布尔数组（密集+稀疏混合存储，节省内存）
 Home-page: https://github.com/BKsell/bool-hybrid-array
 Author: 蔡靖杰
@@ -813,7 +813,9 @@ print(list(data[1][0]))  # [5, 6]
 * **9.12.5**：修复了一些已知的问题
 * **9.12.6**：修复了一些已知的问题
 * **9.12.7**：新增BHA_Queue的put、get、pop、popleft、append、appendleft方法
-* **9.12.8**：优化性能，修复大量上古bug
+* **9.12.9**：优化性能，修复大量上古bug
+* **9.12.10**：修复大量bug
+* **9.12.11**：优化sort的性能
 
 
 
@@ -872,3 +874,16 @@ print(list(data[1][0]))  # [5, 6]
 ```
 
 **9.12.8 版本起**使用者也可选择 **MulanPSL‑2.0**，详情参见**`LICENSE‑MulanPSL2`**文件
+
+```
+    Copyright (c) 2026 蔡靖杰
+    bool-hybrid-array 遵循 Mulan PSL v2 许可证。
+    您可以依据 Mulan PSL v2 的条款使用本项目。
+    Mulan PSL v2 可通过如下地址获取：
+
+        http://license.coscl.org.cn/MulanPSL2
+
+    本软件按“原样”提供，不提供任何明示或默示保证，
+    包括但不限于对适销性、特定用途适用性和非侵权性的保证。
+    详见 Mulan PSL v2。
+```

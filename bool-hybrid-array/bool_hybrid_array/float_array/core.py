@@ -180,3 +180,4 @@ class FloatHybridArray(Sequence):
         return len(self.a)
     def __iter__(self):
         return BHA_Iterator(value for value in itertools.takewhile(lambda x: x < len(self), itertools.count(0)))
+    sort = IntHybridArray.sort

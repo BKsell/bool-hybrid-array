@@ -4,13 +4,22 @@ from collections.abc import Iterable,MutableSet
 from ..core import *
 import builtins
 def block_insert_sort(arr, start, end):
-    for i in range(start + 1, end):
-        current = arr[i]
-        insert_pos = bisect.bisect_right(arr, current, start, i)
-        j = i
-        while j > insert_pos:
-            arr[j], arr[j-1] = arr[j-1], arr[j]
-            j -= 1
+    i = start + 1
+    while i < end:
+        if i > start and arr[i - 1] > arr[i]:
+            left = i - 1
+            while left > start and arr[left - 1] > arr[i]:
+                left -= 1
+            l, r = left, i - 1
+            while l < r:
+                arr[l], arr[r] = arr[r], arr[l]
+                l += 1
+                r -= 1
+            arr[left], arr[i] = arr[i], arr[left]
+            i = left
+        else:
+            i += 1
+
 def merge_two_blocks(arr, left_start, left_end, right_end):
     if arr[left_end - 1] <= arr[left_end]:
         return
@@ -39,8 +48,8 @@ class IntBitTag(BHA_bool, metaclass=ResurrectMeta):
         return "'-1'" if (hasattr(self, 'is_sign_bit') and self.is_sign_bit and self) else "'1'" if self else "'0'"
     __repr__ = __str__
     __del__ = lambda self:self
-class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
-    def __init__(self, int_array: list[int], bit_length: int = 8):
+class IntHybridArray(MutableSequence,metaclass=ResurrectMeta):
+    def __init__(self, int_array: list[int], bit_length: int|None = None):
         self.bit_length = bit_length
         bool_data = []
         max_required_bits = 1
@@ -53,7 +62,7 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
                 required_bits = 1 + num_bits_needed
             if required_bits > max_required_bits:
                 max_required_bits = required_bits
-        self.bit_length = max_required_bits
+        self.bit_length = max(bit_length, max_required_bits) if bit_length is not None else max_required_bits
         for num in int_array:
             if num >= 0:
                 sign_bit = False
@@ -69,17 +78,34 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
                         carry = 0 if num_bits[j] else 1
             bool_data.append(sign_bit)
             bool_data.extend(num_bits)
-        self.total_bits = len(bool_data)
-        super().__init__(0, self.total_bits, False, IntBitTag, False)
-        for idx in range(self.total_bits):
-            if idx < self.size:
-                super().__setitem__(idx, bool_data[idx])
+        total_bits = len(bool_data)
+        self._bits = BoolHybridArray(0, total_bits, False, IntBitTag, False)
+        for idx in range(total_bits):
+            if idx < self._bits.size:
+                self._bits[idx] = bool_data[idx]
             else:
-                super().append(bool_data[idx])
-        for i in range(0, self.total_bits, self.bit_length):
-            if i < self.size:
-                bit_tag = super().__getitem__(i)
+                self._bits.append(bool_data[idx])
+        for i in range(0, total_bits, self.bit_length):
+            if i < self._bits.size:
+                bit_tag = self._bits[i]
                 bit_tag.is_sign_bit = True
+
+    def view(self):
+        return self._bits
+
+    def _set_bit(self, idx, value):
+        value = bool(value)
+        bits = self._bits
+        if idx <= bits.split_index:
+            bits.small[idx] = value
+            return
+        pos = bisect.bisect_left(bits.large, idx)
+        exists = pos < len(bits.large) and bits.large[pos] == idx
+        should_be_in_large = value if bits.is_sparse else not value
+        if should_be_in_large and not exists:
+            bits.large.insert(pos, idx)
+        elif not should_be_in_large and exists:
+            del bits.large[pos]
 
     def to_int(self, bit_chunk):
         sign_bit = bit_chunk[0].value
@@ -110,9 +136,9 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
             for i in range(start, stop, step):
                 block_start = i * self.bit_length
                 block_end = block_start + self.bit_length
-                if block_end > self.size:
+                if block_end > self._bits.size:
                     raise IndexError("索引超出范围")
-                bit_chunk = [super(self.__class__, self).__getitem__(j) for j in range(block_start, block_end)]
+                bit_chunk = [self._bits[j] for j in range(block_start, block_end)]
                 num = self.to_int(bit_chunk)
                 result.append(num)
             return IntHybridArray(result, self.bit_length)
@@ -121,9 +147,9 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
             raise IndexError("索引超出范围")
         block_start = key * self.bit_length
         block_end = block_start + self.bit_length
-        if block_end > self.size:
+        if block_end > self._bits.size:
             raise IndexError("索引超出范围")
-        bit_chunk = [super(self.__class__, self).__getitem__(j) for j in range(block_start, block_end)]
+        bit_chunk = [self._bits[j] for j in range(block_start, block_end)]
         return self.to_int(bit_chunk)
 
     def __setitem__(self, key, value):
@@ -131,11 +157,14 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
             start, stop, step = key.indices(len(self))
             for i,v in zip(range(start,stop,step),value):self[i] = v
             return
+        key = key if key >= 0 else key + len(self)
+        if not (0 <= key < len(self)):
+            raise IndexError("索引超出范围")
         tmp1 = IntHybridArray([value],bit_length = self.bit_length)
         tmp = tmp1.view()
-        if tmp1[0] == value:
+        if tmp1[0] == value and tmp1.bit_length == self.bit_length:
             for i,v in zip(range(key*self.bit_length,(key+1)*self.bit_length),tmp):
-                super().__setitem__(i,v)
+                self._set_bit(i, v)
         else:
             lst = list(self)
             lst[key] = value
@@ -148,7 +177,7 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
     __repr__ = __str__
 
     def __len__(self):
-        return self.total_bits // self.bit_length
+        return self._bits.size // self.bit_length
     def __delitem__(self, index: int = -1):
         index = index if index >= 0 else index + len(self)
         if not (0 <= index < len(self)):
@@ -157,8 +186,7 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
         pop_bit_start = index * self.bit_length
         pop_bit_end = pop_bit_start + self.bit_length
         for _ in range(self.bit_length):
-            super().__delitem__(pop_bit_start)
-        self.total_bits -= self.bit_length
+            del self._bits[pop_bit_start]
     def index(self, value):
         value = int(value)
         x = f"{value} 不在 IntHybridArray 中"
@@ -187,25 +215,16 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
             len_ = sum(1 for _ in copy)
         else:
             len_ = len(iterable)
-        self.total_bits += len_*self.bit_length
+        self._bits.size += len_*self.bit_length
+        base = len(self) - len_
         for i,j in zip(range(len_),iterable):
-            self[-i-1] = j
+            self[base + i] = j
     def append(self,value):
-        self.total_bits += self.bit_length
-        self.size = self.total_bits
+        self._bits.size += self.bit_length
         self[-1] = value
     def sort(self):
         n = len(self)
         BLOCK_SIZE = 32
-        start = 0
-        while start < n - 1:
-            end = start
-            while end < n - 1 and self[end] > self[end + 1]:
-                end += 1
-            segment_length = end - start + 1
-            if segment_length > 3:
-                self[start:end+1] = self[start:end+1][::-1]
-            start = end + 1
         for start in range(0, n, BLOCK_SIZE):
             end = min(start + BLOCK_SIZE, n)
             block_insert_sort(self, start, end)
@@ -220,9 +239,9 @@ class IntHybridArray(BoolHybridArray,metaclass=ResurrectMeta):
     def insert(self,index,value):
         tmp1 = IntHybridArray([value],bit_length = self.bit_length)
         tmp = tmp1.view()
-        if tmp1[0] == value:
+        if tmp1[0] == value and tmp1.bit_length == self.bit_length:
             for i,v in zip(range(index*self.bit_length,(index+1)*self.bit_length),tmp):
-                super().insert(i,v)
+                self._bits.insert(i,v)
         else:
             lst = list(self)
             lst.insert(index,value)

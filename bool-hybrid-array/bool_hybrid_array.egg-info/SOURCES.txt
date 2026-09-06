@@ -16,8 +16,6 @@ bool_hybrid_array.egg-info/dependency_links.txt
 bool_hybrid_array.egg-info/requires.txt
 bool_hybrid_array.egg-info/top_level.txt
 bool_hybrid_array/float_array/__init__.py
-bool_hybrid_array/float_array/core.c
 bool_hybrid_array/float_array/core.py
 bool_hybrid_array/int_array/__init__.py
-bool_hybrid_array/int_array/core.c
 bool_hybrid_array/int_array/core.py

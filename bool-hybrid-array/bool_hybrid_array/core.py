@@ -656,8 +656,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         return self
 
     def memory_usage(self, detail=False) -> dict | int:
-        small_mem = (self.small.size >>3) + 32
-        large_mem = (len(self.large) << 2) + 32
+        small_mem = (self.small.size >>3) + 96
+        large_mem = (len(self.large) << 2) + 40
         equivalent_list_mem = 40 + 8 * self.size
         equivalent_numpy_mem = 96 + self.size
         total = small_mem+large_mem
@@ -693,6 +693,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             sample_cnt += win_sz
             if sample_cnt >= max_sample_points:
                 break
+
         sample_total = min(n, 512)
         total_true = sum(1 for idx in range(0,n,n//sample_total if n>sample_total else 1) if bool(self[idx]))
         global_density = total_true / sample_total
@@ -750,7 +751,7 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
             arr = TruesArray(0)
             arr.large,arr.small,arr.split_index,arr.is_sparse,arr.Type,arr.hash_,arr.size = lst
             return arr
-        a = isinstance(lst, (Iterator, Generator, map))
+        a = isinstance(lst, (Iterator, Generator, map)) and not isinstance(lst, BoolHybridArray)
         if a:
             lst = BHA_Iterator(lst)
             size = sum(1 for _ in lst)
@@ -760,27 +761,40 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
             true_count = sum(bool(val) for val in lst)
         if not size:
             return BoolHybridArray(0, 0, is_sparse=False if is_sparse is None else is_sparse)
-        if is_sparse is None:
-            is_sparse = true_count <= (size - true_count)
-        if split_index == None:
+        if split_index is None:
             C = 4 if size < (1 << 32) else 8
-            total_true = sum(bool(v) for v in lst)
             running_true = 0
             min_cost = float('inf')
             best_split = 0
+            best_is_sparse = is_sparse
             val_iter = iter(lst)
-            for s in range(size):
+            for s, val in enumerate(val_iter):
                 small_cost = s + 7 >> 3
-                seg_true = total_true - running_true
+                seg_true = true_count - running_true - bool(val)
                 seg_len = size - 1 - s
                 seg_false = seg_len - seg_true
-                large_cost = seg_true * C if is_sparse else seg_false * C
-                cur_cost = small_cost + large_cost
+                if is_sparse is None:
+                    cost_sparse_true = small_cost + seg_true * C
+                    cost_sparse_false = small_cost + seg_false * C
+                    if cost_sparse_true <= cost_sparse_false:
+                        cur_cost = cost_sparse_true
+                        cur_is_sparse = True
+                    else:
+                        cur_cost = cost_sparse_false
+                        cur_is_sparse = False
+                else:
+                    cur_cost = small_cost + (seg_true * C if is_sparse else seg_false * C)
+                    cur_is_sparse = is_sparse
                 if cur_cost < min_cost:
                     min_cost = cur_cost
                     best_split = s
-                running_true += bool(next(val_iter))
+                    best_is_sparse = cur_is_sparse
+                running_true += bool(val)
             split_index = best_split
+            if is_sparse is None:
+                is_sparse = best_is_sparse
+        elif is_sparse is None:
+            is_sparse = true_count <= (size - true_count)
         arr = BoolHybridArray(split_index = split_index, size = size, is_sparse = is_sparse, Type = Type, hash_ = F)
         small_max_idx = min(split_index, size - 1)
         if a:
