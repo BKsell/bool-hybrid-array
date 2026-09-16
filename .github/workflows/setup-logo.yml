@@ -1,0 +1,26 @@
+name: Setup logo
+on:
+  push:
+    paths:
+      - '.github/workflows/setup-logo.yml'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download logo and cleanup workflow
+        run: |
+          curl -sL "https://aka.doubaocdn.com/s/xx51q7XrUe" -o logo.png
+          rm -f .github/workflows/setup-logo.yml
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add logo.png [skip ci]" || echo "Nothing to commit"
+          git push
