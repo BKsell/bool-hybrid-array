@@ -1913,7 +1913,7 @@ class namespace(ProtectedBuiltinsDict):
         self = ProtectedBuiltinsDict({**tmp,**namespace_},name = name,protected_names = namespace_.get("protected_names",()))
         self["__namespace__"] = self
         return self
-def lazy_sieve():
+def BHA_lazy_sieve():
     from .int_array import IntHybridArray
     flags = BoolHybridArr([False, False, True])
     primes = IntHybridArray([2])

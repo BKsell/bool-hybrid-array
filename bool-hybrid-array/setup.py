@@ -81,7 +81,7 @@ finally:
         license="Apache-2.0 OR MulanPSL-2.0",
         license_files=["LICENSE", "NOTICE", "LICENSE‑MulanPSL2"],
         name="bool-hybrid-array",
-        version="9.13.2",
+        version="9.13.3",
         author="蔡靖杰",
         extras_require={
             "int_array": [],
