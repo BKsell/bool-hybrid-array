@@ -12,8 +12,9 @@ try:from . import twg_sort
 except:pass
 try:from . import _cppiostream
 except:pass
-__version__ = "9.13.1"
+__version__ = "9.13.2"
 public_objects = {
+        "BHA_lazy_sieve":core.BHA_lazy_sieve,
         "np": core.np,
         "T": core.BHA_bool(1),
         "F": core.BHA_bool(0),

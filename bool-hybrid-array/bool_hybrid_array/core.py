@@ -1913,3 +1913,23 @@ class namespace(ProtectedBuiltinsDict):
         self = ProtectedBuiltinsDict({**tmp,**namespace_},name = name,protected_names = namespace_.get("protected_names",()))
         self["__namespace__"] = self
         return self
+def lazy_sieve():
+    from .int_array import IntHybridArray
+    flags = BoolHybridArr([False, False, True])
+    primes = IntHybridArray([2])
+    yield 2
+    n = 3
+    while True:
+        if n >= len(flags):
+            old_len = len(flags)
+            new_len = n + 1
+            extend_cnt = new_len - old_len
+            flags.extend(TruesArray(extend_cnt))
+            for p in primes:
+                start = ((old_len + p - 1) // p) * p
+                for multiple in range(start, new_len, p):
+                    flags[multiple] = False
+        if flags[n]:
+            primes.append(n)
+            yield n
+        n += 1

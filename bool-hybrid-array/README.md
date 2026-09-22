@@ -828,6 +828,7 @@ for p in ps:
 * **9.12.25**：优化umfs哈希安全性
 * **9.13.0**：新增struct_array
 * **9.13.1**：BHAX支持StructHybridArray，umfs哈希bitn可无限大，修复一些已知的问题
+* **9.13.2**：新增BHA_lazy_sieve，用法：gen = BHA_lazy_sieve()，这里gen是一个无限迭代器，迭代他可以不断产出质数
 
 
 ## **彩蛋：**
