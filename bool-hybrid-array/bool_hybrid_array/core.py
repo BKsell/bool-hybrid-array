@@ -10,7 +10,8 @@ import builtins,multiprocessing
 from types import MappingProxyType
 import array,bisect,numpy as np
 from collections.abc import MutableSequence,Iterable,Generator,Iterator,Sequence,Collection
-import itertools,copy,sys,math,weakref,random,mmap,os,pathlib,shutil,zipfile
+import itertools,copy,sys,math,weakref,random,mmap,os,pathlib,shutil,zipfile,json
+from itertools import dropwhile
 from functools import reduce
 import operator,ctypes,gc,abc,types
 from functools import lru_cache
@@ -34,7 +35,7 @@ memcpy.restype = ctypes.c_void_p
 memcpy.argtypes = (ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t)
 if hasattr(types, 'GenericAlias'):
     _GenericAlias = types.GenericAlias
-class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):# type: ignore
+class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
     __module__ = 'bool_hybrid_array'
     name = 'ResurrectMeta'
     def __new__(cls, name, bases, namespace):
@@ -47,7 +48,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):# type: ignore
         super_cls.__setattr__('name', name)
         super_cls.__setattr__('bases', bases)
         super_cls.__setattr__('namespace', namespace)
-        super_cls.__setattr__('original_dict', dict(obj.__dict__))# type: ignore[assignment]
+        super_cls.__setattr__('original_dict', dict(obj.__dict__))
         try:del obj.original_dict["__abstractmethods__"]
         except:pass
         try:del obj.original_dict["_abc_impl"]
@@ -60,7 +61,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):# type: ignore
         except:pass
         try:del obj.original_dict['_abc_negative_cache_version']
         except:pass
-        super_cls.__setattr__('original_dict', MappingProxyType(obj.original_dict))# type: ignore[assignment]
+        super_cls.__setattr__('original_dict', MappingProxyType(obj.original_dict))
         return obj
     @lru_cache
     def __str__(cls):
@@ -113,7 +114,7 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):# type: ignore
         pass
     original_dict = MappingProxyType(original_dict)
 ResurrectMeta.__class__ = ResurrectMeta
-class BHA_Function(metaclass=ResurrectMeta):# type: ignore
+class BHA_Function(metaclass=ResurrectMeta):
     def __init__(self,v):
         self.data,self.module = v,__name__
     def __call__(self,*a,**b):
@@ -255,7 +256,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         self.is_sparse = is_sparse
         self.small = self._CompactBoolArray(self.split_index + 1)
         self.small.set_all(not is_sparse)
-        self.large = array.array('I') if size < 1<<32 else array.array('Q')
+        self.large = array.array('I') if size < 1<<32 else array.array('Q') if size < 1 << 64 else []
         self.generator = iter(self)
         self.hash_ = hash_
         if hash_:
@@ -301,6 +302,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                 self.small[i] = value
                 return None
             else:
+                if self[i] == value:
+                    return
                 pos, exists = _get_sparse_info(i)
                 condition = not value or exists
                 if self.is_sparse != condition:
@@ -308,7 +311,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                 else:
                     if pos < len(self.large):
                         del self.large[pos]
-                return None
+                return
 
     @overload
     def __getitem__(self, idx: int, /) -> Any: ...
@@ -371,12 +374,12 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     @overload
     def __delitem__(self, key: slice, /) -> None: ...
     def __delitem__(self, key: int|slice = -1,/) -> None:
-        key = key if key >= 0 else key + self.size
         if isinstance(key, slice):
             start, stop, step = key.indices(self.size)
             for i in reversed(range(start,stop,step)):
                 del self[i]
             return
+        key = key if key >= 0 else key + self.size
         if not (0 <= key < self.size):
             raise IndexError(f"索引 {key} 超出范围 [0, {self.size})")
 
@@ -393,7 +396,42 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             for i in range(adjust_pos, len(self.large)):
                 self.large[i] -= 1
         self.size -= 1
-
+    def compare(self, other):
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        # 用普通生成器逐位取，避免直接持有 iter(self) 返回的 BHA_Iterator；
+        # any 之后再包 BHA_Iterator，其内部 tee 的副本从第一个 True 之后开始，
+        # 耗尽重建不会回退到前导零。
+        it_self = (v for v in self)
+        it_other = (v for v in other)
+        a,b = any(it_self),any(it_other)
+        if not(a and b):
+            if a: return 1      # self 非零, other 全零
+            if b: return -1     # self 全零, other 非零
+            return 0            # 两边都全零，相等
+        it_self,it_other = BHA_Iterator(it_self),BHA_Iterator(it_other)
+        l1 = sum(1 for _ in it_self)
+        l2 = sum(1 for _ in it_other)
+        if (l2 < l1) - (l2 > l1):
+            return (l2 < l1) - (l2 > l1)
+        diff_pairs = dropwhile(lambda pair: pair[0] == pair[1], zip(it_self, it_other))
+        first_diff = next(diff_pairs, None)
+        if first_diff is None:
+            return 0
+        s_bit, o_bit = first_diff
+        return -1 if s_bit < o_bit else 1
+    def __lt__(self, other):
+        res = self.compare(other)
+        return NotImplemented if res is NotImplemented else res < 0
+    def __le__(self, other):
+        res = self.compare(other)
+        return NotImplemented if res is NotImplemented else res <= 0
+    def __ge__(self, other):
+        res = self.compare(other)
+        return NotImplemented if res is NotImplemented else res >= 0
+    def __gt__(self, other):
+        res = self.compare(other)
+        return NotImplemented if res is NotImplemented else res > 0
     def __str__(self) -> str:
         return f"BoolHybridArr([{','.join(map(str,self))}])"
 
@@ -412,7 +450,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             for i in range(len(self.large)):
                 self.large[i] += 1
         else:
-            pos = bisect.bisect_right(self.large, key)
+            pos = bisect.bisect_left(self.large, key)
             for i in range(pos, len(self.large)):
                 self.large[i] += 1
             if (self.is_sparse and value) or (not self.is_sparse and not value):
@@ -432,30 +470,30 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __contains__(self, value:Any) -> bool:
         if not isinstance(value, (bool,np.bool_,self.Type,BHA_bool)):return False
         if not self.size:return False
-        for i in range(10):
-            if self[random.randint(0,self.size-1)] == value:
+        for i in range(30):
+            if self.small[random.randrange(0,self.small.size)] == value:
                 return True
-        b = any(1 for i in range(self.small.size+1>>1) if value==self.small[i] or value==self.small[self.small.size-i-1])
+        b = (1 for i in range(self.small.size+1>>1) if value==self.small[i] or value==self.small[self.small.size+~i])
         if value == self.is_sparse:
-            return self.large or b
+            return self.large or any(b)
         else:
-            return len(self.large) == self.size-self.split_index-1 or b
+            return (len(self.large) == self.size+~self.split_index and self.large) or any(b)
 
     def __bool__(self) -> bool:
         return bool(self.size)
 
     def __any__(self):
-        return builtins.T in self
+        return True in self
 
     def __all__(self):
-        return builtins.F not in self
+        return False not in self
 
     def __eq__(self, other) -> bool:
-        if not isinstance(other, (BoolHybridArray, list, tuple, np.ndarray, array.array)):
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        if len(self) != len(other) if hasattr(other, "__len__") else len(self) != len(BHA_Iterator(other)):
             return False
-        if len(self) != len(other):
-            return False
-        return all(a == b for a, b in zip(self, other))
+        return all(map(operator.eq, self, other))
 
     def __ne__(self, other) -> bool:
         return not self == other
@@ -463,7 +501,9 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __and__(self, other) -> BoolHybridArray:
         if type(other) == int:
             other = abs(other)
-            other = bin(other)[2:]
+            other = map(int,f"{other:0{self.size}b}")
+        if isinstance(other, (Iterator, Generator, map)) and not isinstance(other, (BHA_Iterator, BoolHybridArray)):
+            other = BHA_Iterator(other)
         if len(self) != len(other):
             raise ValueError(f"与运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.and_, self, other),hash_ = self.hash_)
@@ -476,15 +516,13 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __or__(self, other) -> BoolHybridArray:
         if type(other) == int:
             other = abs(other)
-            other = bin(other)[2:]
-        if self.size != len(other):
+            other = map(int,f"{other:0{self.size}b}")
+        if isinstance(other, (Iterator, Generator, map)) and not isinstance(other, (BHA_Iterator, BoolHybridArray)):
+            other = BHA_Iterator(other)
+        if len(self) != len(other):
             raise ValueError(f"或运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.or_, self, other),hash_ = self.hash_)
-
     def __ror__(self, other) -> BoolHybridArray:
-        if type(other) == int:
-            other = abs(other)
-            other = bin(other)[2:]
         return self | other
 
     def __rshift__(self, other) -> BoolHybridArray:
@@ -524,24 +562,17 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         return arr
 
     def __rand__(self, other) -> BoolHybridArray:
-        if type(other) == int:
-            other = bin(other)[2:]
         return self & other
 
     def __xor__(self, other) -> BoolHybridArray:
+        if type(other) == int:
+            other = abs(other)
+            other = map(int,f"{other:0{self.size}b}")
+        if isinstance(other, (Iterator, Generator, map)) and not isinstance(other, (BHA_Iterator, BoolHybridArray)):
+            other = BHA_Iterator(other)
         if len(self) != len(other):
             raise ValueError(f"异或运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.xor, self, other),hash_ = self.hash_)
-
-    def __gt__(self,other):
-        if self.size!=len(other):
-            return self.size>len(other)
-        return any(map(operator.gt,self,other))
-
-    def __lt__(self,other):
-        if self.size!=len(other):
-            return self.size<len(other)
-        return any(map(operator.lt,self,other))
 
     def __rxor__(self, other) -> BoolHybridArray:
         return self^other
@@ -558,48 +589,153 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __copy__(self) -> BoolHybridArray:
         return self.copy()
 
+    @staticmethod
+    def _add(a, b):
+        bits, carry = [], 0
+        for x, y in itertools.zip_longest(reversed(a), reversed(b), fillvalue=0):
+            s = int(x) + int(y) + carry
+            bits.append(s & 1)
+            carry = s >> 1
+        if carry:
+            bits.append(1)
+        bits.reverse()
+        return BoolHybridArr(bits)
+
+    @staticmethod
+    def _sub(a, b):
+        bits, borrow = [], 0
+        for x, y in itertools.zip_longest(reversed(a), reversed(b), fillvalue=0):
+            d = int(x) - int(y) - borrow
+            borrow = d < 0
+            bits.append(d + 2 if borrow else d)
+        bits.reverse()
+        i = 0
+        while i < len(bits) and bits[i] == 0:
+            i += 1
+        return BoolHybridArr(bits[i:])
+
+    @staticmethod
+    def _strip_leading_zeros(x):
+        """去掉前导零；全零返回空数组（0 的规范表示）。"""
+        bs = [1 if v else 0 for v in x]
+        i = 0
+        while i < len(bs) and bs[i] == 0:
+            i += 1
+        return BoolHybridArr(bs[i:])
+
+    @staticmethod
+    def _div(a, b):
+        """二进制长除法：返回 a // b（商），要求 b != 0 且隐式 a >= 0。"""
+        if int(b) == 0:
+            raise ZeroDivisionError("真整除：除数为 0")
+        quotient = []
+        rem = BoolHybridArr([])
+        for bit in a:
+            # rem = rem * 2 + bit（末尾接一个 bit）；每步都规范化，去掉前导零，
+            # 否则 rem 会从空值 0 开始越拼越长（[0]、[0,1]、[0,1,0]...），
+            # 带前导零的中间余数会让 >= 比较判错。
+            rem = BoolHybridArray._strip_leading_zeros(rem + BoolHybridArr([bool(bit)]))
+            if rem >= b:
+                rem = BoolHybridArray._strip_leading_zeros(BoolHybridArray._sub(rem, b))
+                quotient.append(1)
+            else:
+                quotient.append(0)
+        i = 0
+        while i < len(quotient) and quotient[i] == 0:
+            i += 1
+        return BoolHybridArr(quotient[i:])
+
+    @staticmethod
+    def _as_bits(x):
+        if isinstance(x, BoolHybridArray):
+            return x
+        if isinstance(x, int):
+            if x < 0:
+                raise ValueError("真运算暂不支持负数")
+            return BoolHybridArr([int(c) for c in bin(x)[2:]]) if x > 0 else BoolHybridArr([])
+        return BoolHybridArr(x)
+
+    def add(self, other):
+        """真加法：把 self 与 other 当作二进制数按位相加（带进位），返回新数组。
+        区别于 .__add__ / + ：那是拼接。"""
+        return self._add(self, self._as_bits(other))
+
+    def sub(self, other):
+        """真减法：self - other（二进制数，带借位），要求 self >= other。"""
+        return self._sub(self, self._as_bits(other))
+
+    def div(self, other):
+        """真整除：self // other（二进制长除法，返回商）。"""
+        return self._div(self, self._as_bits(other))
+
     def __mul__(self, arr2):
+        if isinstance(arr2, int):
+            # 拼接语义：把自身重复 n 次；n <= 0 返回空数组（对齐 list 行为）
+            n = arr2
+            if n <= 0:
+                return BoolHybridArr([])
+            res = BoolHybridArr([])
+            base = self.copy()
+            while n:
+                if n & 1:
+                    res += base
+                base = base + base
+                n >>= 1
+            return res
         len1, len2 = len(self), len(arr2)
-        result = FalsesArray(len1 + len2)
-        offset = 0
-        for i in range(len1-1, -1, -1):
-            if not self[i]:
-                continue
-            carry = 0
-            for j in range(len2-1, -1, -1):
-                idx = i + j + 1 + offset
-                product = result[idx] + arr2[j] + carry
-                result[idx] = product & 1
-                carry = product >> 1
-            current_pos = i + offset
-            while carry > 0 and current_pos >= 0:
-                total = result[current_pos] + carry
-                result[current_pos] = total & 1
-                carry = total >> 1
-                current_pos -= 1
-            if carry > 0:
-                result.insert(0, carry)
-                offset += 1
-        start_idx = 0
-        while start_idx < len(result) and not result[start_idx]:
-            start_idx += 1
-        if start_idx == len(result):
-            return FalsesArray(1)
-        return result[start_idx:]
+
+        if len1 < 64 or len2 < 64:
+            result = FalsesArray(len1 + len2)
+            for i in range(len1 - 1, -1, -1):
+                if not self[i]:
+                    continue
+                carry = 0
+                for j in range(len2 - 1, -1, -1):
+                    k = i + j + 1
+                    s = int(result[k]) + int(arr2[j]) + carry
+                    result[k] = s & 1
+                    carry = s >> 1
+                k = i
+                while carry:
+                    s = int(result[k]) + carry
+                    result[k] = s & 1
+                    carry = s >> 1
+                    k -= 1
+            i = 0
+            while i < len(result) - 1 and not result[i]:
+                i += 1
+            return result[i:]
+
+        m = max(len1, len2) >> 1
+        low1 = self[len1 - m:] if len1 > m else self
+        high1 = self[:len1 - m] if len1 > m else FalsesArray(1)
+        low2 = arr2[len2 - m:] if len2 > m else arr2
+        high2 = arr2[:len2 - m] if len2 > m else FalsesArray(1)
+
+        z0 = low1 * low2
+        z2 = high1 * high2
+        z1 = self._sub(self._sub(self._add(low1, high1) * self._add(low2, high2), z0), z2)
+
+        return self._add(self._add(z2 << (m << 1), z1 << m), z0)
+
+    def __rmul__(self, other):
+        if isinstance(other, int):
+            return self * other
+        return NotImplemented
 
     def find(self,value):
         from .int_array import IntHybridArray
-        return IntHybridArray([i for i in range(len(self)) if self[i]==value])
-
+        return IntHybridArray(i for i in range(len(self)) if self[i]==value)
     def extend(self, iterable:Iterable) -> None:
         if isinstance(iterable, (Iterator, Generator, map)):
             iterable,copy = itertools.tee(iterable, 2)
             len_ = sum(1 for _ in copy)
         else:
             len_ = len(iterable)
+        old_size = self.size
         self.size += len_
         for i,j in zip(range(len_),iterable):
-            self[-i-1] = j
+            self[old_size + i] = j
 
     def append(self,v):
         self.size += 1
@@ -622,7 +758,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                 return i
             if self[-i] == value:
                 x = self.size-i
-            if len(self)-i == i:
+            if len(self)-i <= i:
                 break
         if x != 'not find':
             return x
@@ -634,11 +770,11 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         value = bool(value)
         x = 'not find'
         for i in range(self.size):
-            if self[-i] == value:
-                return -i
+            if self[~i] == value:
+                return self.size + ~i
             if self[i] == value:
-                x = -(self.size-i)
-            if len(self)-i == i:
+                x = i - self.size
+            if len(self)-i <= i:
                 break
         if x != 'not find':
             return x
@@ -656,14 +792,13 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         return self
 
     def memory_usage(self, detail=False) -> dict | int:
-        small_mem = (self.small.size >>3) + 96
+        small_mem = (self.small.size >> 3) + 96
         large_mem = (len(self.large) << 2) + 40
-        equivalent_list_mem = 40 + 8 * self.size
+        equivalent_list_mem = 40 + (self.size << 3)
         equivalent_numpy_mem = 96 + self.size
-        total = small_mem+large_mem
+        total = small_mem + large_mem
         if not detail:
             return total
-
         need_optimize = False
         optimize_reason = ""
         n = self.size
@@ -672,82 +807,74 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                 "总占用(字节)": total,
                 "密集区占用": small_mem,
                 "稀疏区占用": large_mem,
-                "对比原生list节省": "100.000000%",
+                "对比原生list节省": "N/A",
                 "对比numpy节省": "N/A",
                 "是否需要优化": "否",
                 "优化理由/说明": "数组为空"
             }
-        win_sz = min(256, n)
-        max_sample_points = 2048
-        step = max(1, n // (max_sample_points // win_sz))
-        max_density = 0.0
-        min_density = 1.0
-        sample_cnt = 0
-        for start in range(0, n - win_sz +1, step):
-            cnt = 0
-            for pos in range(start, start+win_sz):
-                cnt += 1 if bool(self[pos]) else 0
-            dens = cnt / win_sz
-            max_density = max(max_density, dens)
-            min_density = min(min_density, dens)
-            sample_cnt += win_sz
-            if sample_cnt >= max_sample_points:
-                break
-
-        sample_total = min(n, 512)
-        total_true = sum(1 for idx in range(0,n,n//sample_total if n>sample_total else 1) if bool(self[idx]))
-        global_density = total_true / sample_total
-
-        entry_bytes = 4 if n < (1<<32) else 8
-        cost_dense = (n +7)//8 + 32
-        cost_sparse = int(global_density * n)* entry_bytes + 32
-
-        if cost_sparse > cost_dense * 1.25:
+        sparse_size = n - self.split_index - 1
+        dense_size = self.split_index + 1
+        entry_bytes = 4 if n < (1 << 32) else 8
+        if sparse_size > 0 and large_mem >= (sparse_size >> 3) + 96:
             need_optimize = True
-            optimize_reason = f"O(1)采样评估(全局{global_density:.3f},窗口max={max_density:.3f},min={min_density:.3f})，稀疏存储开销显著高于位密集存储，建议转密集模式"
-        elif cost_dense > cost_sparse *1.25:
+            optimize_reason = "稀疏区索引密度过高，优化后可转为密集存储提升速度"
+        sampled_total = 0
+        dense_density = 0.5
+        if not need_optimize and dense_size >= 16:
+            win_sz = min(256, dense_size)
+            max_points = 1024
+            n_win = max(1, max_points // win_sz)
+            step = max(1, dense_size // n_win)
+            sampled_true = 0
+            sampled_total = 0
+            for start in range(0, dense_size - win_sz + 1, step):
+                for i in range(start, start + win_sz):
+                    if self.small[i]:
+                        sampled_true += 1
+                sampled_total += win_sz
+                if sampled_total >= max_points:
+                    break
+            dense_density = sampled_true / sampled_total if sampled_total > 0 else 0.5
+            minority_ratio = min(dense_density, 1.0 - dense_density)
+            minority_count = int(minority_ratio * dense_size)
+            minority_cost = minority_count * entry_bytes + 40
+            if minority_cost <= small_mem:
+                need_optimize = True
+                optimize_reason = "密集区有效值占比过低，优化后可转为稀疏存储节省内存"
+        if not need_optimize and n < 32 and total > n:
             need_optimize = True
-            optimize_reason = f"O(1)采样评估(全局{global_density:.3f},窗口max={max_density:.3f},min={min_density:.3f})，位密集存储开销显著高于稀疏索引，建议转稀疏模式"
-        elif n <32 and total > n:
-            need_optimize = True
-            optimize_reason = "小尺寸数组存储冗余，可进一步压缩"
-        else:
-            optimize_reason = "O(1)采样密度评估完成，当前存储模式匹配数据分布，无需优化"
+            optimize_reason = "小尺寸数组存储冗余，优化后将用int位存储进一步省内存"
+        if not need_optimize and sparse_size >= 16 and dense_size > 0:
+            if self.is_sparse:
+                intruder_ratio = 1.0 - (len(self.large) / sparse_size if sparse_size > 0 else 0)
+            else:
+                intruder_ratio = len(self.large) / sparse_size if sparse_size > 0 else 0
+            if sampled_total > 0:
+                dense_minority_ratio = min(dense_density, 1.0 - dense_density)
+            else:
+                dense_minority_ratio = 0.5
+            if intruder_ratio > 0.3 and dense_minority_ratio > 0.3:
+                need_optimize = True
+                optimize_reason = "密集区有效值占比过低，优化后可转为稀疏存储节省内存"
+
+        if not need_optimize:
+            optimize_reason = "当前存储模式已适配数据特征，无需优化"
 
         return {
             "总占用(字节)": total,
             "密集区占用": small_mem,
             "稀疏区占用": large_mem,
-            "对比原生list节省": f"{(1 - total/equivalent_list_mem)*100:.6f}%",
-            "对比numpy节省": f"{(1 - total/equivalent_numpy_mem)*100:.6f}%" if equivalent_numpy_mem > 0 else "N/A",
+            "对比原生list节省": f"{min((1 - total / equivalent_list_mem) * 100, 99.999999):.6f}%",
+            "对比numpy节省": f"{min((1 - total / equivalent_numpy_mem) * 100, 99.999999):.6f}%" if equivalent_numpy_mem > 0 else "N/A",
             "是否需要优化": "是" if need_optimize else "否",
             "优化理由/说明": optimize_reason
         }
-
-    __sizeof__ = memory_usage
-
-    def get_shape(self):
-        return (self.size,)
-
-    def __array__(self,dtype = np.bool_,copy = None):
-        arr = np.fromiter(map(np.bool_,self), dtype=dtype)
-        return arr.copy() if copy else arr.view()
-
-    def view(self):
-        arr = TruesArray(0)
-        arr.__dict__ = self.__dict__
-        return arr
-
     def __reduce__(self):
-        return BoolHybridArr,((self.large,self.small,self.split_index,self.is_sparse,self.Type,self.hash_,self.size),),
-
-    dequeue = lambda self:self.pop(0)
-    def save(self,path,*a,**k):return Create_BHA(path,self,*a,**k)
-
+        return BoolHybridArr,((self.large, self.small, self.split_index, self.is_sparse, self.Type, self.hash_, self.size),)
 class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     def __new__(cls, lst: Iterable = (), is_sparse=None, Type = None, hash_ = True, split_index = None) -> BoolHybridArray:
-        if isinstance(lst,tuple) and len(lst)==6 and isinstance(lst[0],array.array) and isinstance(lst[1],(BoolHybridArray._CompactBoolArray,np.ndarray)):
+        if isinstance(lst,tuple) and len(lst)==7 and isinstance(lst[0],array.array) and isinstance(lst[1],(BoolHybridArray._CompactBoolArray,np.ndarray)):
             arr = TruesArray(0)
             arr.large,arr.small,arr.split_index,arr.is_sparse,arr.Type,arr.hash_,arr.size = lst
             return arr
@@ -821,7 +948,7 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
             arr.large.extend(large_indices)
         arr.large = sorted(arr.large)
         type_ = 'I' if size < 1 << 32 else 'Q'
-        arr.large = array.array(type_, arr.large)
+        arr.large = array.array(type_, arr.large) if size < 1 << 64 else list(arr.large)
         if hash_:
             for existing_array, existing_hash in hybrid_array_cache.items():
                 try:
@@ -848,7 +975,7 @@ def FalsesArray(size, Type = None,hash_ = True):
     split_index = int(split_index) if split_index < 150e+7*2 else int(145e+7*2)
     return BoolHybridArray(split_index,size,True,Type = Type,hash_ = hash_)
 Bool_Array = np.arange(2,dtype = np.uint8)
-class BHA_bool(int,metaclass=ResurrectMeta):# type: ignore
+class BHA_bool(int,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     def __new__(cls, value):
         core_value = bool(value)
@@ -882,12 +1009,12 @@ class BHA_bool(int,metaclass=ResurrectMeta):# type: ignore
     def __len__(self):
         raise TypeError("'BHA_bool' object has no attribute '__len__'")
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
-class BHA_Bool(BHA_bool,metaclass=ResurrectMeta):# type: ignore
+class BHA_Bool(BHA_bool,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     @lru_cache
     def __new__(cls,v):
         return builtins.T if v else builtins.F
-class BHA_List(list,metaclass=ResurrectMeta):# type: ignore
+class BHA_List(list,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     def __init__(self,arr):
         from .float_array import FloatHybridArray
@@ -955,10 +1082,13 @@ class BHA_List(list,metaclass=ResurrectMeta):# type: ignore
     def save(self,path,*a,**k):return Create_BHA(path,self,*a,**k)
     @classmethod
     def load(path,*a,**k):return Ask_BHA(path,*a,**k)
-class BHA_Iterator(Iterator,metaclass=ResurrectMeta):# type: ignore
+class BHA_Iterator(Iterator,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     def __init__(self,data):
         self.data,self.copy_data = itertools.tee(iter(data),2)
+    def __len__(self):
+        self.copy_data,it = itertools.tee(self.copy_data,2)
+        return sum(1 for _ in it)
     def __next__(self):
         try:return next(self.data)
         except StopIteration:
@@ -1053,7 +1183,7 @@ class BHA_string(metaclass = ResurrectMeta):
         self.write(line.rstrip("\r\n").rstrip("\n"))
     def __iter__(self):
         return BHA_Iterator(iter(self._buf))
-M = (1 << 521) - 1
+M = (1 << 2281) - 1
 
 E1, E2, E3, E4, E5 = 11, 13, 17, 19, 23
 E6, E7, E8, E9, E10 = 29, 31, 37, 41, 43
@@ -1107,8 +1237,9 @@ class UltraMersenneFractalSponge(metaclass =  ResurrectMeta):
             term = (pow(num, 7, M) * self.r) % M
             self.c = (self.c ^ self.r + term) % M
         return self
-    def digest(self):
-        return bytes.fromhex(self.hexdigest())
+    update = absorb
+    def digest(self,*a,**k):
+        return bytes.fromhex(self.hexdigest(*a,**k))
     def _fold_recursive(self, arr):
         if len(arr) <= 2:
             res = 0
@@ -1123,6 +1254,13 @@ class UltraMersenneFractalSponge(metaclass =  ResurrectMeta):
         cross = (left * right ^ l3 + r3) % M
         return tenth_order_mapping(cross)
     def hexdigest(self,bitn = 256):
+        if bitn > 4562:
+            s = ""
+            while bitn >= 4096:
+                s += self.hexdigest(bitn = 4096)
+                bitn -= 4096
+            s = self.hexdigest(bitn = bitn) + s
+            return s
         len3 = pow(self.total_len, 3, M)
         self.r ^= len3
         self.c = (self.c + len3 * self.r) % M
@@ -1136,9 +1274,9 @@ class UltraMersenneFractalSponge(metaclass =  ResurrectMeta):
             c3 = pow(self.c, 3, M)
             cross = (r3 ^ c3 + self.r * self.c) % M
             self.r, self.c = cross % M, (cross ^ self.r) % M
-        res = ((self.r << 128) + self.c) % M
+        res = (self.r << max(0,bitn - 2281)) ^ self.c
         mask = (1 << bitn) - 1
-        return f"{res & mask:064x}"
+        return f"{res & mask:0{bitn + 3 >> 2}x}"
     squeeze = hexdigest
 umfs = UltraMersenneFractalSponge
 def _real_generator(in_q,out_q):
@@ -1187,25 +1325,50 @@ def _real_generator(in_q,out_q):
 @lru_cache(None,False)
 def create_mt_xor25_generator():
     """
-    MT-XOR25 永久密钥使用规范：
-    1. 私钥生成：直接使用MT-XOR25算法输出的哈希值作为永久私钥；
-    2. 公钥推导：无需自定义逻辑，调用UMFS对私钥做哈希，结果即为公钥：
-    public_key = umfs(private_key.encode()).hexdigest()；
+    MT-XOR25 永久密钥使用规范
+
+    1. 私钥生成：
+    在用户本地设备初始化`mt_xor25`实例，使用
+    umfs(bytes(f"{rng.getrandbits(256):032x}")).digest(bitn = 2048)
+    作为Ed25519私钥种子；由该种子派生Ed25519私钥。私钥生成全程在本地完成，私钥本身永不外发。
+
+    2. 公钥推导：
+    由上一步生成的Ed25519私钥，直接推导对应的Ed25519公钥；公钥可上传至服务端用于验签，公钥仅用于身份校验，不能用于加密私钥。（官方推荐不加域分离前缀，也可以加）
+
     3. 身份验证：
-   - 服务端用MT-XOR25生成随机挑战串，下发给用户端；
-   - 用户端用MT-XOR25私钥对挑战串做umfs哈希，生成签名并返回；
-   - 服务端用保存的公钥验证签名（对比哈希结果），匹配则身份验证通过。
+    - 用户端：原始消息M，计算`umfs(M).digest(bitn = 1024)`，使用本地Ed25519私钥对该payload生成签名，POST提交服务端。bitn可以根据场景决定（bitn可以是128（简短）/256（默认）/1024（权衡）/2048/4096，也可以不是2的幂）
+    - 服务端用：收到M、签名、公钥标识；取出数据库中该用户对应的公钥，对消息执行完全一致的umfs摘要，调用Ed25519验签函数。
+    - 服务端用保存的公钥验证签名（对比哈希结果），匹配则身份验证通过。
+    
+    
     公钥加密规范（非强制但建议，泄漏了也没事）
-    不要用 HTTP 协议传输公钥；
-    不要在日志、明文存储（如 txt 文件）中记录公钥（如需存储，需加密后再存）；
-    不要在非加密的通信渠道（如邮件、聊天软件）发送公钥。
+    - 不要用 HTTP 协议传输公钥；
+    - 不要在日志、明文存储（如 txt 文件）中记录公钥（如需存储，需加密后再存）；
+    - 不要在非加密的通信渠道（如邮件、聊天软件）发送公钥。
     所有涉及公钥、私钥签名、验证信息的传输，必须用 POST 请求，不要用 GET
+    
+    
     私钥强制保密规则：
     1. 生成：仅在用户本地设备生成，绝不传输到任何服务器/第三方；
     2. 存储：仅加密存储在用户本地（如设备安全区、加密文件），禁止明文存储；
     3. 传输：绝对禁止通过任何渠道（HTTPS/邮件/聊天软件）传输私钥；
     4. 泄露后果：私钥一旦泄露，攻击者可完全冒充用户身份，且无法补救（只能重置私钥和公钥）。
+    
+    
+    示例代码：
+    
+    from bool_hybrid_array import mt_xor25, umfs
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    rng = mt_xor25()
+    sk_seed = umfs(bytes(f"{rng.getrandbits(256):032x}")).digest(bitn = 2048)
+    private_key = ed25519.Ed25519PrivateKey.from_private_bytes(sk_seed)
+    pub = private_key.public_key()
+    msg = b"your data"
+    msg_digest = umfs(msg).digest(bitn = 1024)
+    sig = private_key.sign(msg_digest)
+    pub.verify(sig, umfs(msg).digest(bitn = 1024)) #这里的bitn必须和msg_digest的完全一致
     """
+ 
     number = multiprocessing.cpu_count() << 1
     in_q = [Queue() for _ in range(number)]
     out_q = Queue()
@@ -1270,7 +1433,8 @@ def create_mt_xor25_generator():
     it = BHA_Iterator(iter(gen))
     return gen
 mt_xor25 = create_mt_xor25_generator
-from ._cppiostream import *
+try:from ._cppiostream import *
+except:pass
 def _bhax_is_bit_set(val) -> bool:
     s = str(val)
     return s == '1' or s == 'True' or val is True
@@ -1331,7 +1495,8 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
             lines.extend(self._encode_1d(arr.a))
             lines.extend(self._encode_1d(arr.b))
             lines.extend(self._encode_1d(arr.lengths))
-            lines.extend(self._encode_1d(arr.signs))
+            if hasattr(arr, 'signs'):
+                lines.extend(self._encode_1d(arr.signs))
             lines.append(self.FLOAT_END_SENTINEL)
             return lines
         else:
@@ -1364,7 +1529,6 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
             a = self._decode_1d(lines_iter)
             b = self._decode_1d(lines_iter)
             lengths = self._decode_1d(lines_iter)
-            # 兼容旧格式：无 signs 数组
             next_line = next(lines_iter).strip()
             if next_line == self.FLOAT_END_SENTINEL:
                 signs = BoolHybridArr([bool(a[i] < 0) for i in range(len(a))])
@@ -1380,6 +1544,89 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
             return fh
         raise ValueError(f"未知类型标记 {typ}")
 
+    def _struct_field_kind(self, ft):
+        from .struct_array.core import BHA_Struct, BHA_Char
+        if ft is BHA_Char:
+            return "int_char"
+        if ft is int:
+            return "int"
+        if ft is float:
+            return "float"
+        if ft is bool:
+            return "bool"
+        if isinstance(ft, type) and issubclass(ft, BHA_Struct):
+            return "struct"
+        return "list"
+
+    def _write_struct(self, zf, sarr, prefix: str):
+        from .struct_array.core import StructHybridArray, BHA_Char
+        sc = sarr.struct_class
+        fields_meta = {}
+        for fn, ft in sc.__BHAStructAttrs__.items():
+            kind = self._struct_field_kind(ft)
+            if kind == "struct":
+                sub = getattr(ft, "__module__", None)
+                qual = getattr(ft, "__qualname__", None)
+                fields_meta[fn] = {"kind": "struct", "module": sub, "qualname": qual}
+            else:
+                fields_meta[fn] = {"kind": kind}
+        meta = {
+            "module": getattr(sc, "__module__", None),
+            "qualname": getattr(sc, "__qualname__", None),
+            "fields": fields_meta,
+        }
+        zf.writestr(f"{prefix}meta.json", json.dumps(meta))
+        for fn, storage in sarr.attrs.items():
+            kind = fields_meta[fn]["kind"]
+            child_prefix = f"{prefix}{fn}/"
+            if kind == "struct":
+                self._write_struct(zf, storage, child_prefix)
+            elif kind == "list":
+                zf.writestr(f"{child_prefix}data.json", json.dumps(list(storage)))
+            else:
+                lines = self._encode_1d(storage)
+                zf.writestr(f"{child_prefix}{self.INNER_SDA}", "\n".join(lines))
+
+    def _read_struct(self, zf, prefix: str):
+        import importlib
+        from .struct_array.core import StructHybridArray, BHA_Char
+        from .int_array import IntHybridArray
+        text = zf.read(f"{prefix}meta.json").decode("utf-8")
+        meta = json.loads(text)
+        mod = importlib.import_module(meta["module"])
+        sc = eval(meta["qualname"], vars(mod))
+        fields_meta = meta["fields"]
+        storages = {}
+        size = 0
+        for fn, fm in fields_meta.items():
+            kind = fm["kind"]
+            child_prefix = f"{prefix}{fn}/"
+            if kind == "struct":
+                storages[fn] = self._read_struct(zf, child_prefix)
+                size = max(size, len(storages[fn]))
+            elif kind == "list":
+                data = json.loads(zf.read(f"{child_prefix}data.json").decode("utf-8"))
+                storages[fn] = data
+                size = max(size, len(data))
+            else:
+                sda = child_prefix + self.INNER_SDA
+                lines_iter = iter([ln for ln in zf.read(sda).decode("utf-8").splitlines() if ln.strip()])
+                arr = self._decode_1d(lines_iter)
+                if kind == "int_char":
+                    arr = IntHybridArray(list(arr), Type=BHA_Char)
+                storages[fn] = arr
+                size = max(size, len(arr))
+        out = StructHybridArray(sc, 0)
+        for fn, fm in fields_meta.items():
+            kind = fm["kind"]
+            if kind == "struct":
+                out.attrs[fn] = storages[fn]
+            elif kind == "list":
+                out.attrs[fn] = storages[fn]
+            else:
+                out.attrs[fn] = storages[fn]
+        return out
+
     def _write_bha_list(self, zf, data, prefix: str):
         for idx, item in enumerate(data):
             path = f"{prefix}{idx}/"
@@ -1390,10 +1637,13 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
                 zf.writestr(f"{path}{self.INNER_SDA}", "\n".join(lines))
 
     def write_data(self, arr):
+        from .struct_array.core import StructHybridArray
         if self._root.exists():
             self._root.unlink()
         with zipfile.ZipFile(self._root, 'w', zipfile.ZIP_DEFLATED) as zf:
-            if isinstance(arr, BHA_List):
+            if isinstance(arr, StructHybridArray):
+                self._write_struct(zf, arr, "")
+            elif isinstance(arr, BHA_List):
                 self._write_bha_list(zf, arr, "")
             else:
                 wrapper = BHA_List([arr])
@@ -1431,12 +1681,28 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
             size = os.fstat(fd).st_size
             mm = mmap.mmap(fd, size, access=mmap.ACCESS_READ)
             try:
+                if not hasattr(mm, 'seekable'):
+                    class _SeekableMM:
+                        def __init__(self, m): self._m = m
+                        def read(self, n=-1): return self._m.read(n)
+                        def seek(self, pos, whence=0): return self._m.seek(pos, whence)
+                        def tell(self): return self._m.tell()
+                        def seekable(self): return True
+                        def close(self): self._m.close()
+                    mm = _SeekableMM(mm)
                 with zipfile.ZipFile(mm) as zf:
-                    result = self._read_bha_list(zf, "")
+                    names = zf.namelist()
+                    if "meta.json" in names:
+                        result = self._read_struct(zf, "")
+                    else:
+                        result = self._read_bha_list(zf, "")
             finally:
                 mm.close()
         finally:
             os.close(fd)
+        from .struct_array.core import StructHybridArray
+        if isinstance(result, StructHybridArray):
+            return result
         if len(result) == 1 and not isinstance(result[0], BHA_List):
             return result[0]
         return result
@@ -1448,7 +1714,7 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
     def __repr__(self):
         return f"<BHAX_Descriptor dataset_root='{self._root}'>"
 
-class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
+class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
     def __init__(self, *args, protected_names = (("T", "F","Ask_arr","Ask_BHA","Create_BHA","temp2","BHA_Queue","numba_opt","namespace")+tuple(globals())),
                  name = 'builtins', **kwargs):
         super().__init__(*args, **kwargs)
@@ -1477,7 +1743,7 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):# type: ignore
         except:
             if sys.implementation.name == 'cpython':
                 raise
-        finally:super().__setitem__(name, value)
+        else:super().__setitem__(name, value)
     def __delitem__(self, name):
         if name in self.protected_names:
             print(f"\033[31m警告：禁止删除内置常量 __builtins__['{name}']！\033[0m")
@@ -1555,12 +1821,15 @@ def Ask_BHA(path,mode = "BHA"):
         return temp
 
 class BHA_Queue(Collection, metaclass=ResurrectMeta):
-    def __init__(self, data=(), *a, **k):
-        self.a = BoolHybridArr(data, *a, **k)
-        self.b = BoolHybridArr([], *a,**k)
+    def __init__(self, data=(), collection = BoolHybridArr, *a, **k):
+        self.a = collection(data, *a, **k)
+        self.b = collection([], *a,**k)
+        self.collection = collection
     def __str__(self):
         return f"BHA_Queue([{','.join(itertools.chain(map(str,reversed(self.b)),map(str,self.a)))}])"
     __repr__ = __str__
+    def __contains__(self,v):
+        return v in self.a or v in self.b
     def enqueue(self, v):
         self.a.push(v)
     def dequeue(self):
@@ -1568,7 +1837,7 @@ class BHA_Queue(Collection, metaclass=ResurrectMeta):
             return self.b.pop()
         elif self.a:
             Type = self.b.Type
-            self.b = BoolHybridArr(reversed(self.a))
+            self.b = self.collection(reversed(self.a))
             self.b.Type = Type
             self.a.clear()
             return self.dequeue()
@@ -1590,7 +1859,7 @@ class BHA_Queue(Collection, metaclass=ResurrectMeta):
             return self.a.pop()
         if self.b:
             Type = self.a.Type
-            self.a = BoolHybridArr(reversed(self.b))
+            self.a = self.collection(reversed(self.b))
             self.a.Type = Type
             self.b.clear()
             return self.a.pop()
@@ -1614,7 +1883,7 @@ def Create_BHA(path,arr,mode = "BHA"):
             mm[:] = temp
             mm.flush()
 def numba_opt():
-    import numba # type: ignore
+    import numba
     sig = numba.types.Union([
         numba.types.intp(
             numba.types.Array(numba.types.uint32, 1, 'C'),
@@ -1644,34 +1913,3 @@ class namespace(ProtectedBuiltinsDict):
         self = ProtectedBuiltinsDict({**tmp,**namespace_},name = name,protected_names = namespace_.get("protected_names",()))
         self["__namespace__"] = self
         return self
-if inspect.ismodule(builtins):
-    builtins.np = np
-    builtins.T = BHA_bool(1)
-    builtins.F = BHA_bool(0)
-    builtins.BHA_Bool = BHA_Bool
-    builtins.BHA_List = BHA_List
-    builtins.FalsesArray = FalsesArray
-    builtins.TruesArray = TruesArray
-    builtins.BoolHybridArr = BoolHybridArr
-    builtins.BHA_Iterator = BHA_Iterator
-    builtins.BoolHybridArray = BoolHybridArray
-    builtins.BHA_Bool.T, builtins.BHA_Bool.F = BHA_bool(1), BHA_bool(0)
-    builtins.ResurrectMeta = ResurrectMeta
-    builtins.ProtectedBuiltinsDict = ProtectedBuiltinsDict
-    builtins.BHA_Function = BHA_Function
-    builtins.Ask_BHA = Ask_BHA
-    builtins.Create_BHA = Create_BHA
-    builtins.numba_opt = numba_opt
-    builtins.cin = cin
-    builtins.cout = cout
-    builtins.endl = endl
-    builtins.BHA_Queue = BHA_Queue
-    builtins.create_mt_xor25_generator = create_mt_xor25_generator
-    builtins.BHA_string = BHA_string
-    builtins.mt_xor25 = mt_xor25
-    Tid, Fid = id(builtins.T), id(builtins.F)
-    original_builtins_dict = builtins.__dict__.copy()
-    __builtins__ = ProtectedBuiltinsDict(original_builtins_dict)
-    builtins = __builtins__
-    sys.modules['builtins'] = builtins
-    builtins.name = 'builtins'

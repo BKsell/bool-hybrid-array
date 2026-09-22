@@ -377,31 +377,31 @@ class Point:
 
 point = Point()
 
-cin >> point #输入：20 13
+#cin >> point #输入：20 13
 
-cout << point.x << ' ' << point.y #输出：20 13
+#cout << point.x << ' ' << point.y #输出：20 13
 
 #BHA_string（9.11.21版本新增）
 
-string = BHA_string('')
+#string = BHA_string('')
 
-cin >> string#输入：bool-hybrid-array is efficient boolean array
+#cin >> string#输入：bool-hybrid-array is efficient boolean array
 
-cout << string#输出：bool-hybrid-array is efficient boolean array
+#cout << string#输出：bool-hybrid-array is efficient boolean array
 
 #fstream和操纵符（9.11.34版本新增）
 
-with ofstream("test.out") as fout:
+#with ofstream("test.out") as fout:
 
-    fout << "test" << endl
+    #fout << "test" << endl
 
-s = BHA_string()
+#s = BHA_string()
 
-with ifstream("test.out") as fin:
+#with ifstream("test.out") as fin:
 
-    fin >> s
+    #fin >> s
 
-cout  << setfill('f') << setw(10) << s#输出：fffffftest
+#cout  << setfill('f') << setw(10) << s#输出：fffffftest
 
 #BHAX_Descriptor（9.12.0版本新增）
 
@@ -423,3 +423,57 @@ desc.write_data(BHA_List([
 ]))
 data = desc.read_data()
 print(data[1][0])  # [5, 6]
+
+#自创密码学工具链：umfs和mt_xor25
+
+h = umfs(b"hello world!").hexdigest(bitn = 4406) #bitn：输出bit数，最大4406，超过会产生前导0
+
+print(h) #不同版本可能输出不同
+
+#mt_xor25密码学随机数生成器（CSPRNG）
+
+rng = mt_xor25()
+
+"""
+使用方式：
+rng()：随机128位哈希
+next(rng)：同rng()
+for v in rng：无限迭代，每次循环v都是全新的随机128位哈希
+rng.randrange()/rng.uniform()/rng.randint()/rng.getrandbits()：用法同random库
+"""
+
+print(umfs(bytes(rng())).hexdigest(bitn = 4406)) #比裸调用更安全
+
+#struct_array（9.13.0版本新增）
+
+from bool_hybrid_array.struct_array import BHA_Struct, BHA_Vec2, BHA_RGBA
+
+class Particle(BHA_Struct):
+    __BHAStructAttrs__ = {
+        "pos": BHA_Vec2,     # 嵌套 struct
+        "age": int,          # IntHybridArray 列
+        "mass": float,       # FloatHybridArray 列
+        "alive": bool,       # BoolHybridArr 列
+        "color": BHA_RGBA,   # 嵌套 struct
+        "name": str,         # 退化成 list
+    }
+
+ps = Particle * 100
+
+p = ps[0]
+p.pos.x = 1.5
+p.age = 0
+p.mass = 9.8
+p.alive = True
+p.color.r = 255
+p.name = "alpha"
+
+ps[0], ps[1] = ps[1], ps[0]      # Python 风格交换正确
+
+q = Particle(age=1, mass=1.0, name="beta")
+ps.append(q)
+ps.append({"pos": (0, 0), "age": 0, "mass": 0.0,
+           "alive": False, "color": (0, 0, 0, 255), "name": "ghost"})
+
+for p in ps:
+    p.age += 1

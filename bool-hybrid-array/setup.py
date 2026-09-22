@@ -9,7 +9,11 @@ try:
     include_dirs = [np.get_include()]
 
     source_files = [
-        "bool_hybrid_array/core.py"
+        "bool_hybrid_array/core.py",
+        "bool_hybrid_array/int_array/core.py",
+         "bool_hybrid_array/float_array/core.py",
+         "bool_hybrid_array/twg_sort.py",
+         "bool_hybrid_array/struct_array/core.py",
     ]
 
     pyx_files = []
@@ -30,10 +34,8 @@ try:
     else:
         import platform
         arch = platform.machine().lower()
-        c_args = [
-            "-O3"
-        ]
-        link_args = ["-flto=full", "-Wl,--gc-sections"]
+        c_args = []
+        link_args = []
 
         if arch in ("x86_64", "amd64"):
             c_args.append("-march=x86-64-v2")
@@ -79,7 +81,7 @@ finally:
         license="Apache-2.0 OR MulanPSL-2.0",
         license_files=["LICENSE", "NOTICE", "LICENSE‑MulanPSL2"],
         name="bool-hybrid-array",
-        version="9.12.11",
+        version="9.13.1",
         author="蔡靖杰",
         extras_require={
             "int_array": [],
@@ -109,13 +111,13 @@ finally:
             'Programming Language :: Python :: Implementation :: CPython',
             'Programming Language :: Python :: Implementation :: PyPy',
             "License :: OSI Approved :: Apache Software License",
+            "License :: OSI Approved :: Mulan Permissive Software License v2 (MulanPSL-2.0)",
             "Operating System :: OS Independent",
         ],
         keywords="boolean array, compact storage",
         package_data={
             "": ["README.md", "LICENSE", "NOTICE", "LICENSE‑MulanPSL2" , 'temp.py', 'temp.cmd', 'BHA_Opener.7z'],
             "bool_hybrid_array": ["*.py", "*.pyd", "*.c", "*"],
-            "bool_hybrid_array/__pycache__": ['*.pyc'],
             "bool_hybrid_array/int_array": ["*.py", "*.pyd", "*.c", "*"],
             "bool_hybrid_array/float_array": ["*.py", "*.pyd", "*.c", "*"]
         },

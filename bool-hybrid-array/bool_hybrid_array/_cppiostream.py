@@ -149,7 +149,7 @@ class istream:
         self._get_char = None
 
         if sys.platform == "win32":
-            import msvcrt
+            msvcrt = __import__("msvcrt") # noqa: cython-no-cimport
             self._get_char = lambda: ord(msvcrt.getche())
             self.eof = 26
         else:
@@ -460,7 +460,7 @@ class ostream:
         self.libc = None
 
         if sys.platform == "win32":
-            import msvcrt
+            import msvcrt # noqa: cython-no-cimport
             self.libc = msvcrt
             self.k32 = CDLL("kernel32.dll", use_last_error=True)
             self.k32.WriteConsoleW.restype = c_bool
