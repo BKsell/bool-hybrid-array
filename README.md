@@ -533,6 +533,60 @@ desc.write_data(BHA_List([
 data = desc.read_data()
 print(list(data[1][0]))  # [5, 6]
 
+#自创密码学工具链：umfs和mt_xor25
+
+h = umfs(b"hello world!").hexdigest(bitn = 4406) #bitn：输出bit数，<9.13.1版本最大4406，超过会产生前导0，9.13.1版本起bitn可无限
+
+print(h) #不同版本可能输出不同
+
+#mt_xor25密码学随机数生成器（CSPRNG）
+
+rng = mt_xor25()
+
+"""
+使用方式：
+rng()：随机128位哈希
+next(rng)：同rng()
+for v in rng：无限迭代，每次循环v都是全新的随机128位哈希
+rng.randrange()/rng.uniform()/rng.randint()/rng.getrandbits()：用法同random库，注意：不支持seed
+"""
+
+print(umfs(bytes(rng())).hexdigest(bitn = 4406)) #比裸调用更安全
+
+#struct_array（9.13.0版本新增）
+
+from bool_hybrid_array.struct_array import BHA_Struct, BHA_Vec2, BHA_RGBA
+
+class Particle(BHA_Struct):
+    __BHAStructAttrs__ = {
+        "pos": BHA_Vec2,     # 嵌套 struct
+        "age": int,          # IntHybridArray 列
+        "mass": float,       # FloatHybridArray 列
+        "alive": bool,       # BoolHybridArr 列
+        "color": BHA_RGBA,   # 嵌套 struct
+        "name": str,         # 退化成 list
+    }
+
+ps = Particle * 100
+
+p = ps[0]
+p.pos.x = 1.5
+p.age = 0
+p.mass = 9.8
+p.alive = True
+p.color.r = 255
+p.name = "alpha"
+
+ps[0], ps[1] = ps[1], ps[0]      # Python 风格交换正确
+
+q = Particle(age=1, mass=1.0, name="beta")
+ps.append(q)
+ps.append({"pos": (0, 0), "age": 0, "mass": 0.0,
+           "alive": False, "color": (0, 0, 0, 255), "name": "ghost"})
+
+for p in ps:
+    p.age += 1
+
 
 
 ```
@@ -756,8 +810,26 @@ print(list(data[1][0]))  # [5, 6]
 * **9.12.6**：修复了一些已知的问题
 * **9.12.7**：新增BHA_Queue的put、get、pop、popleft、append、appendleft方法
 * **9.12.9**：优化性能，修复大量上古bug
-
-
+* **9.12.10**：修复大量bug
+* **9.12.11**：优化sort的性能
+* **9.12.12**：加强umfs的安全性
+* **9.12.13**：修复大量bug
+* **9.12.14**：修复大量bug，优化性能
+* **9.12.15**：修复了一些已知的问题****
+* **9.12.16**：优化性能，修复bug
+* **9.12.17**：修复bug，新增int_array.IntRSBTSet、float_array.FloatRSBTSet、twg_sort.twg_sort
+* **9.12.18**：修复编译错误
+* **9.12.19**：修复twg_sort崩溃问题
+* **9.12.20**：尝试编译_cppiostream
+* **9.12.21**：尝试修复twg_sort的错误
+* **9.12.22**：修复twg_sort错误和优化性能
+* **9.12.23**：修复float数组排序bug
+* **9.12.24**：修复无法导入的bug
+* **9.12.25**：优化umfs哈希安全性
+* **9.13.0**：新增struct_array
+* **9.13.1**：BHAX支持StructHybridArray，umfs哈希bitn可无限大，修复一些已知的问题
+* **9.13.2**：新增BHA_lazy_sieve，用法：gen = BHA_lazy_sieve()，这里gen是一个无限迭代器，迭代他可以不断产出质数
+* **9.13.3**：修复笔误
 
 
 ## **彩蛋：**
@@ -814,3 +886,16 @@ print(list(data[1][0]))  # [5, 6]
 ```
 
 **9.12.8 版本起**使用者也可选择 **MulanPSL‑2.0**，详情参见**`LICENSE‑MulanPSL2`**文件
+
+```
+    Copyright (c) 2026 蔡靖杰
+    bool-hybrid-array 遵循 Mulan PSL v2 许可证。
+    您可以依据 Mulan PSL v2 的条款使用本项目。
+    Mulan PSL v2 可通过如下地址获取：
+
+        http://license.coscl.org.cn/MulanPSL2
+
+    本软件按“原样”提供，不提供任何明示或默示保证，
+    包括但不限于对适销性、特定用途适用性和非侵权性的保证。
+    详见 Mulan PSL v2。
+```
