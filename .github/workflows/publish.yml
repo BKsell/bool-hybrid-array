@@ -1,26 +1,120 @@
 name: Publish to PyPI
+
 on:
   push:
     tags:
       - "v*"
+
 permissions:
-  id-token: write
   contents: read
+
 jobs:
-  build-and-publish:
+  build-wheels:
+    name: Build wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Inject tag version into setup.py
+        shell: bash
+        run: |
+          python - "${{ steps.version.outputs.version }}" <<'PY'
+          import sys
+          ver = sys.argv[1]
+          p = "bool-hybrid-array/setup.py"
+          s = open(p, encoding="utf-8").read()
+          marker = 'version="'
+          i = s.index(marker)
+          j = s.index('"', i + len(marker))
+          s = s[:i + len(marker)] + ver + s[j:]
+          open(p, "w", encoding="utf-8", newline="").write(s)
+          PY
+
+      - name: Build wheels with cibuildwheel
+        uses: pypa/cibuildwheel@v2.22.0
+        with:
+          package-dir: bool-hybrid-array
+          output-dir: wheelhouse
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  build-sdist:
+    name: Build sdist
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Inject tag version into setup.py
+        shell: bash
+        run: |
+          python - "${{ steps.version.outputs.version }}" <<'PY'
+          import sys
+          ver = sys.argv[1]
+          p = "bool-hybrid-array/setup.py"
+          s = open(p, encoding="utf-8").read()
+          marker = 'version="'
+          i = s.index(marker)
+          j = s.index('"', i + len(marker))
+          s = s[:i + len(marker)] + ver + s[j:]
+          open(p, "w", encoding="utf-8", newline="").write(s)
+          PY
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
-      - name: Install build dependencies
-        run: pip install build
-        working-directory: ../../bool-hybrid-array
-      - name: Build package
-        run: python -m build
-        working-directory: ../../bool-hybrid-array
-      - name: Publish to PyPI
+          python-version: "3.11"
+
+      - name: Build sdist
+        working-directory: bool-hybrid-array
+        run: |
+          python -m pip install --upgrade build
+          python -m build --sdist
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: bool-hybrid-array/dist/*.tar.gz
+
+  publish:
+    name: Publish to PyPI
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: ../../bool-hybrid-array/dist
+          packages-dir: dist
