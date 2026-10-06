@@ -1,0 +1,14 @@
+[build-system]
+# 构建隔离环境里自动安装这些依赖，确保 setup.py 里的 Cython 编译真正生效（不会降级成纯 Python 包）
+requires = [
+    "setuptools>=64",
+    "wheel",
+    "Cython>=3.2.4",
+    "numpy>=1.19.0",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.cibuildwheel]
+# 只构建 CPython 官方 wheel；PyPy 下 Cython 扩展不可用，用户会回退到源码安装（sdist）
+build = "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-*"
+archs = ["auto"]
