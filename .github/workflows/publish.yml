@@ -10,12 +10,13 @@ permissions:
 
 jobs:
   build-wheels:
-    name: Build wheels (${{ matrix.os }})
+    name: Build wheels (${{ matrix.os }} ${{ matrix.pyver }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        pyver: [cp38, cp39, cp310, cp311, cp312, cp313, cp314]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,27 +48,19 @@ jobs:
           open(p, "w", encoding="utf-8", newline="").write(s)
           PY
 
-      - name: Build wheels cp38
+      - name: Build wheel
         uses: pypa/cibuildwheel@v2.23.4
         with:
           package-dir: bool-hybrid-array
           output-dir: wheelhouse
         env:
-          CIBW_BUILD: "cp38-*"
+          CIBW_BUILD: "${{ matrix.pyver }}-*"
+          CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.pyver == 'cp38' && 'quay.io/pypa/manylinux2014_x86_64' || 'quay.io/pypa/manylinux_2_28_x86_64' }}
 
-      - name: Build wheels cp39+
-        uses: pypa/cibuildwheel@v2.23.4
-        with:
-          package-dir: bool-hybrid-array
-          output-dir: wheelhouse
-        env:
-          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
-          CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
-
-      - name: Upload wheels
+      - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-${{ matrix.os }}
+          name: wheel-${{ matrix.os }}-${{ matrix.pyver }}
           path: wheelhouse/*.whl
 
   build-sdist:
