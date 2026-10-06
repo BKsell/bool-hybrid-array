@@ -38,11 +38,6 @@ try:
         c_args = []
         link_args = []
 
-        if arch in ("x86_64", "amd64"):
-            c_args.append("-march=x86-64-v2")
-        elif arch.startswith("arm") or arch == "aarch64":
-            c_args.append("-march=armv8-a")
-
     for src in source_files:
         mod_path, _ = os.path.splitext(src)
         mod_name = mod_path.replace("/", ".")
