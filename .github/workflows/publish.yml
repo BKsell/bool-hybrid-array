@@ -32,7 +32,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-      - name: Inject tag version into setup.py
+      - name: Pin tag version into setup.py
         shell: bash
         run: |
           python - "${{ steps.version.outputs.version }}" <<'PY'
@@ -47,11 +47,13 @@ jobs:
           open(p, "w", encoding="utf-8", newline="").write(s)
           PY
 
-      - name: Build wheels with cibuildwheel
-        uses: pypa/cibuildwheel@v2.22.0
+      - name: Build wheels (cibuildwheel)
+        uses: pypa/cibuildwheel@v2.23.4
         with:
           package-dir: bool-hybrid-array
           output-dir: wheelhouse
+        env:
+          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -78,7 +80,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-      - name: Inject tag version into setup.py
+      - name: Pin tag version into setup.py
         shell: bash
         run: |
           python - "${{ steps.version.outputs.version }}" <<'PY'
@@ -93,17 +95,17 @@ jobs:
           open(p, "w", encoding="utf-8", newline="").write(s)
           PY
 
-      - name: Build sdist
+      - name: Build sdist into a fresh dir
         working-directory: bool-hybrid-array
         run: |
           python -m pip install --upgrade build
-          python -m build --sdist
+          python -m build --sdist --outdir ../sdist_out
 
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
           name: sdist
-          path: bool-hybrid-array/dist/*.tar.gz
+          path: sdist_out/*.tar.gz
 
   publish:
     name: Publish to PyPI
