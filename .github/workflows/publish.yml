@@ -47,13 +47,21 @@ jobs:
           open(p, "w", encoding="utf-8", newline="").write(s)
           PY
 
-      - name: Build wheels (cibuildwheel)
+      - name: Build wheels cp38
         uses: pypa/cibuildwheel@v2.23.4
         with:
           package-dir: bool-hybrid-array
           output-dir: wheelhouse
         env:
-          CIBW_BUILD: "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
+          CIBW_BUILD: "cp38-*"
+
+      - name: Build wheels cp39+
+        uses: pypa/cibuildwheel@v2.23.4
+        with:
+          package-dir: bool-hybrid-array
+          output-dir: wheelhouse
+        env:
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
           CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux_2_28_x86_64
 
       - name: Upload wheels
