@@ -2,7 +2,7 @@
 
 import math
 from functools import cmp_to_key
-from .core import BoolHybridArr
+from .core import BoolHybridArr, FalsesArray
 
 _SMALL_MERGE_CAP = 512
 _MIN_BLOCK = 16
@@ -68,6 +68,13 @@ def _bisect_right(arr, x, lo, hi, key=None):
 
 def _reverse(arr, l, r):
     r -= 1
+    sw = getattr(arr, 'swap', None)
+    if sw is not None:
+        while l < r:
+            sw(l, r)
+            l += 1
+            r -= 1
+        return
     while l < r:
         arr[l], arr[r] = arr[r], arr[l]
         l += 1
@@ -128,33 +135,50 @@ def _buffer_merge(arr, lo, mid, hi, key=None):
 
 
 def _insertion_sort(arr, lo, hi, key=None):
+    n2 = hi - lo
+    if n2 <= 1:
+        return
+    # 块局部化：拷到小临时数组排完写回——大数组上的 move/swap 每次 O(size) 全量
+    # 大整数重组；临时数组只有 n2 个元素，局部移动 O(n2) 便宜得多。
+    tmp = arr[lo:hi]
     if key is None:
-        for i in range(lo + 1, hi):
-            kv = arr[i]
-            pos = lo
+        for i in range(1, n2):
+            kv = tmp[i]
+            pos = 0
             hi2 = i
             while pos < hi2:
                 mid = (pos + hi2) >> 1
-                if kv < arr[mid]:
+                if kv < tmp[mid]:
                     hi2 = mid
                 else:
                     pos = mid + 1
-            arr[pos + 1:i + 1] = arr[pos:i]
-            arr[pos] = kv
+            if pos < i:
+                mv = getattr(tmp, 'move', None)
+                if mv is not None:
+                    mv(pos, i - pos, pos + 1)
+                else:
+                    tmp[pos + 1:i + 1] = tmp[pos:i]
+                    tmp[pos] = kv
     else:
-        for i in range(lo + 1, hi):
-            kv = arr[i]
+        for i in range(1, n2):
+            kv = tmp[i]
             kkv = key(kv)
-            pos = lo
+            pos = 0
             hi2 = i
             while pos < hi2:
                 mid = (pos + hi2) >> 1
-                if kkv < key(arr[mid]):
+                if kkv < key(tmp[mid]):
                     hi2 = mid
                 else:
                     pos = mid + 1
-            arr[pos + 1:i + 1] = arr[pos:i]
-            arr[pos] = kv
+            if pos < i:
+                mv = getattr(tmp, 'move', None)
+                if mv is not None:
+                    mv(pos, i - pos, pos + 1)
+                else:
+                    tmp[pos + 1:i + 1] = tmp[pos:i]
+                    tmp[pos] = kv
+    arr[lo:hi] = tmp
 
 
 def _block_merge(arr, lo, mid, hi, use_grail=True, key=None):
@@ -215,19 +239,20 @@ def _block_merge(arr, lo, mid, hi, use_grail=True, key=None):
             return -1 if s1 < s2 else 1
         return -1 if idx1 < idx2 else (1 if idx1 > idx2 else 0)
 
-    blocks = [(0, i) for i in range(K)] + [(1, j) for j in range(M)]
+    blocks = [(0, i) for i in range(K)]
+    blocks.extend((1, j) for j in range(M))
     blocks.sort(key=cmp_to_key(_block_cmp))
 
     from .int_array.core import IntHybridArray
     inv_bl = max(1, (total_blocks - 1).bit_length())
-    inv_perm = IntHybridArray([0] * total_blocks, bit_length=inv_bl)
+    inv_perm = IntHybridArray([0], bit_length=inv_bl, hash_=False) * total_blocks
     for t in range(total_blocks):
         b = blocks[t]
         src = b[0]
         idx = b[1]
         inv_perm[t] = idx if src == 0 else K + idx
 
-    visited = BoolHybridArr([False] * total_blocks)
+    visited = FalsesArray(total_blocks, hash_=False)
     for t in range(total_blocks):
         if visited[t] or inv_perm[t] == t:
             visited[t] = True
@@ -314,6 +339,17 @@ def _block_merge(arr, lo, mid, hi, use_grail=True, key=None):
 def _count_run(arr, lo, hi, key=None):
     if lo + 1 >= hi:
         return 1
+    if key is None:
+        if arr[lo] <= arr[lo + 1]:
+            i = lo + 2
+            while i < hi and arr[i - 1] <= arr[i]:
+                i += 1
+            return i - lo
+        i = lo + 2
+        while i < hi and arr[i] < arr[i - 1]:
+            i += 1
+        _reverse(arr, lo, i)
+        return i - lo
     if _le(arr[lo], arr[lo + 1], key):
         i = lo + 2
         while i < hi and _le(arr[i - 1], arr[i], key):
@@ -360,6 +396,31 @@ def _stable_reverse(arr, lo, hi, key=None):
         i = j
 
 
+def _powersort_power(pos1, len1, pos2, len2, n):
+    """PowerSort 节点幂：相邻 run1=[pos1,pos1+len1) 与 run2=[pos2,pos2+len2) 边界的幂。
+
+    幂 = 两个 run 中点归一化分数 (mid/n) 的二进制前导相同位数。
+    用整数移位计算（CPython listobject.c / power-sort.github.io 的做法）：
+        a = 2*pos1 + len1 = 2*mid1
+        b = a + len1 + len2 = 2*mid2
+    每次循环比较 a/n 与 b/n 的下一位；a>=n 时同步减 n，b>=n 说明两位不同，返回。
+    幂越大 => 越晚合并（该边界在虚拟完美二叉树中越深）。
+    """
+    a = 2 * pos1 + len1
+    b = a + len1 + len2
+    p = 0
+    while True:
+        p += 1
+        if a >= n:
+            a -= n
+            b -= n
+        elif b >= n:
+            break
+        a <<= 1
+        b <<= 1
+    return p
+
+
 def _twg_sort_impl(arr, key=None):
     n = len(arr)
     if n <= 1:
@@ -368,50 +429,66 @@ def _twg_sort_impl(arr, key=None):
         _insertion_sort(arr, 0, n, key)
         return
 
-    threshold = int(math.isqrt(n)) << 1
+    threshold = int(math.isqrt(n)) << 2
     grail_threshold = int((n << 1) / math.log2(n)) if n > 4 else n
     min_run = _min_run(n)
 
-    run_stack = []
-    pos = 0
-    while pos < n:
-        run_len = _count_run(arr, pos, n, key)
-        if run_len < min_run:
-            end = min(n, pos + min_run)
-            _insertion_sort(arr, pos, end, key)
-            run_len = end - pos
-        run_stack.append((pos, run_len))
-        pos += run_len
-        _merge_collapse(arr, run_stack, threshold, grail_threshold, key)
+    # 惰性导入，避免循环：int_array/float_array 都会 from ..twg_sort import twg_sort，
+    # 而 struct_array 又依赖 int_array/float_array。函数内 import 时包已加载完毕，无环。
+    from .struct_array.core import StructHybridArray, BHA_Struct
+    if _twg_sort_impl._Run is None:
+        class _Run(BHA_Struct):
+            __BHAStructAttrs__ = {"pos": int, "length": int, "power": int}
+        _twg_sort_impl._Run = _Run
+    _Run = _twg_sort_impl._Run
 
+    # 栈项列存: pos/length/power 各占一个 IntHybridArray 列（PowerSort 幂记在右侧 run 上）。
+    run_stack = StructHybridArray(_Run, 0, hash_=False)
+    rs_attrs = run_stack.attrs
+    pos = 0
+
+    def _next_run(start):
+        rl = _count_run(arr, start, n, key)
+        if rl < min_run:
+            end = min(n, start + min_run)
+            _insertion_sort(arr, start, end, key)
+            rl = end - start
+        return rl
+
+    # 第一个 run 直接入栈（幂 0：无左边界）
+    run_len = _next_run(pos)
+    run_stack.append({'pos': pos, 'length': run_len, 'power': 0})
+    pos += run_len
+
+    while pos < n:
+        ti = len(run_stack) - 1
+        tpos = rs_attrs['pos'][ti]
+        tlen = rs_attrs['length'][ti]
+        tpow = rs_attrs['power'][ti]
+        run_len = _next_run(pos)
+        # 新边界（栈顶 run 与新 run 之间）的节点幂
+        p = _powersort_power(tpos, tlen, pos, run_len, n)
+        # PowerSort 栈不等式：新幂不大于栈顶已记录的幂，就闭合（合并）栈顶两项
+        while p <= tpow:
+            _merge_at(arr, run_stack, len(run_stack) - 2, threshold, grail_threshold, key)
+            ti = len(run_stack) - 1
+            tpos = rs_attrs['pos'][ti]
+            tlen = rs_attrs['length'][ti]
+            tpow = rs_attrs['power'][ti]
+        run_stack.append({'pos': pos, 'length': run_len, 'power': p})
+        pos += run_len
+
+    # 扫描结束：把栈里剩余 run 全部向右级联合并
     while len(run_stack) > 1:
         _merge_at(arr, run_stack, len(run_stack) - 2, threshold, grail_threshold, key)
 
-
-def _merge_collapse(arr, run_stack, threshold, grail_threshold, key=None):
-    while len(run_stack) >= 2:
-        n = len(run_stack)
-        if n >= 3:
-            a_len = run_stack[n - 3][1]
-            b_len = run_stack[n - 2][1]
-            c_len = run_stack[n - 1][1]
-            if a_len <= b_len + c_len or b_len <= c_len:
-                idx = n - 3 if a_len < c_len else n - 2
-                _merge_at(arr, run_stack, idx, threshold, grail_threshold, key)
-                continue
-        else:
-            b_len = run_stack[n - 2][1]
-            c_len = run_stack[n - 1][1]
-            if b_len <= c_len:
-                _merge_at(arr, run_stack, n - 2, threshold, grail_threshold, key)
-                continue
-        break
+_twg_sort_impl._Run = None
 
 
 def _merge_at(arr, run_stack, idx, threshold, grail_threshold, key=None):
-    a_start = run_stack[idx][0]
-    a_len = run_stack[idx][1]
-    b_len = run_stack[idx + 1][1]
+    a_start = run_stack.attrs['pos'][idx]
+    a_len = run_stack.attrs['length'][idx]
+    b_len = run_stack.attrs['length'][idx + 1]  # noqa
     mid = a_start + a_len
     hi = mid + b_len
     total = a_len + b_len
@@ -426,7 +503,9 @@ def _merge_at(arr, run_stack, idx, threshold, grail_threshold, key=None):
         else:
             _block_merge(arr, lo2, mid, hi2, use_grail=True, key=key)
 
-    run_stack[idx] = (a_start, total)
+    # 合并后的 run 占据 idx 位置；其左边界幂即原 idx 项的 power（保持不动）。
+    run_stack.attrs['pos'][idx] = a_start
+    run_stack.attrs['length'][idx] = total
     del run_stack[idx + 1]
 
 

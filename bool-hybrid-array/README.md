@@ -31,8 +31,6 @@
 ```bash
 #如果没有uv先安装uv
 pip install uv
-#先安装cython可选优化（非强制但推荐）
-python -m uv pip install cython
 #然后安装再bool-hybrid-array
 python -m uv pip install bool-hybrid-array
 
@@ -535,6 +533,8 @@ print(list(data[1][0]))  # [5, 6]
 
 #自创密码学工具链：umfs和mt_xor25
 
+#1.双工海绵哈希：umfs
+
 h = umfs(b"hello world!").hexdigest(bitn = 4406) #bitn：输出bit数，<9.13.1版本最大4406，超过会产生前导0，9.13.1版本起bitn可无限
 
 print(h) #不同版本可能输出不同
@@ -551,7 +551,7 @@ for v in rng：无限迭代，每次循环v都是全新的随机128位哈希
 rng.randrange()/rng.uniform()/rng.randint()/rng.getrandbits()：用法同random库，注意：不支持seed
 """
 
-print(umfs(bytes(rng())).hexdigest(bitn = 4406)) #比裸调用更安全
+print(umfs(rng().encode()).hexdigest(bitn = 4406)) #比裸调用更安全
 
 #struct_array（9.13.0版本新增）
 
@@ -581,13 +581,57 @@ ps[0], ps[1] = ps[1], ps[0]      # Python 风格交换正确
 
 q = Particle(age=1, mass=1.0, name="beta")
 ps.append(q)
-ps.append({"pos": (0, 0), "age": 0, "mass": 0.0,
-           "alive": False, "color": (0, 0, 0, 255), "name": "ghost"})
+ps.append({"pos": BHA_Vec2(0, 0), "age": 0, "mass": 0.0,
+           "alive": False, "color": BHA_RGBA(0, 0, 0, 255), "name": "ghost"})
 
 for p in ps:
     p.age += 1
 
+#BHA_lazy_sieve（9.13.3版本新增，9.13.4版本加入丰富的成员函数）
 
+sieve_gen = BHA_lazy_sieve()
+
+#用法:next(sieve_gen)取下一个素数，sieve_gen.upto(N)返回 ≤N 的所有素数列表，sieve_gen.reset()重置，sieve_gen.current取当前素数，len(sieve)为已发现素数个数，支持序列化
+
+#BHA_Dict（9.13.6版本新增）
+
+from bool_hybrid_array.struct_array import BHA_Dict
+
+d = BHA_Dict(int, str)
+
+d[1] = 'alpha'
+
+d[2] = 'beta'
+
+print(d[1])  # 输出：alpha
+
+print(list(d))  # 输出：[1, 2]（按键升序）
+
+print(len(d))  # 输出：2
+
+d[2] = 'beta2'  # 更新已有键的值
+
+print(d[2])  # 输出：beta2
+
+#StructRSBTSet（9.13.6版本新增）
+
+from bool_hybrid_array.struct_array import BHA_Point, StructRSBTSet
+
+p1 = BHA_Point(x = 1, y = 1)
+
+p2 = BHA_Point(x = 2, y = 2)
+
+s = StructRSBTSet(BHA_Point, key = lambda p: p.x, items = [p1, p2])
+
+print(p1.x in s)  # 输出：True
+
+s.add(BHA_Point(x = 3, y = 3))
+
+s.discard(p1.x)
+
+print(len(s))  # 输出：2
+
+print([(int(p.x), int(p.y)) for p in s])  # 输出：[(2, 2), (3, 3)]（按键升序）
 
 ```
 
@@ -830,6 +874,16 @@ for p in ps:
 * **9.13.1**：BHAX支持StructHybridArray，umfs哈希bitn可无限大，修复一些已知的问题
 * **9.13.2**：新增BHA_lazy_sieve，用法：gen = BHA_lazy_sieve()，这里gen是一个无限迭代器，迭代他可以不断产出质数
 * **9.13.3**：修复笔误
+* **9.13.4**：丰富BHA_lazy_sieve
+* **9.13.5**：修复编译错误
+
+* **9.13.6**：新增BHA_Dict、struct版RSBT（StructRSBTSet），新增IntHybridArray/FloatHybridArray/StructHybridArray的swap、move方法，修复大量bug，优化性能
+
+* **9.13.7**：修复大量bug，优化性能
+
+* **9.13.8**：修复大量bug，优化性能
+
+* **9.13.9**：修复大量bug，优化性能
 
 
 ## **彩蛋：**

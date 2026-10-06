@@ -1,23 +1,24 @@
 # -*- coding: utf-8 -*-
 import sys
+import traceback
 from types import FunctionType
 from . import core
 import builtins,inspect
 from .core import ProtectedBuiltinsDict
 try:from . import int_array,float_array
-except:pass
+except:traceback.print_exc()
 try:from . import struct_array
-except:pass
+except:traceback.print_exc()
 try:from . import twg_sort
-except:pass
+except:traceback.print_exc()
 try:from . import _cppiostream
-except:pass
-__version__ = "9.13.3"
+except:traceback.print_exc()
+__version__ = "9.13.9"
 public_objects = {
         "BHA_lazy_sieve":core.BHA_lazy_sieve,
         "np": core.np,
-        "T": core.BHA_bool(1),
-        "F": core.BHA_bool(0),
+        "T": core.T,
+        "F": core.F,
         "BHA_bool": core.BHA_bool,
         "BHA_Bool": core.BHA_Bool,
         "BHA_List": core.BHA_List,
@@ -105,12 +106,10 @@ globals().update(nobuiltins_objects)
 if inspect.ismodule(builtins):
     for name, obj in public_objects.items():
         setattr(builtins, name, obj)
-    builtins.BHA_Bool.T, builtins.BHA_Bool.F = BHA_bool(1), BHA_bool(0)
     Tid, Fid = id(builtins.T), id(builtins.F)
     original_builtins_dict = builtins.__dict__.copy()
     __builtins__ = ProtectedBuiltinsDict(original_builtins_dict)
     builtins = __builtins__
-    sys.modules['builtins'] = builtins
     builtins.name = 'builtins'
     attrs = [
         "__name__",

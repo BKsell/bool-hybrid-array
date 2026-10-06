@@ -391,17 +391,17 @@ point = Point()
 
 #fstream和操纵符（9.11.34版本新增）
 
-#with ofstream("test.out") as fout:
+with ofstream("test.out") as fout:
 
-    #fout << "test" << endl
+    fout << "test" << endl
 
-#s = BHA_string()
+s = BHA_string()
 
-#with ifstream("test.out") as fin:
+with ifstream("test.out") as fin:
 
-    #fin >> s
+    fin >> s
 
-#cout  << setfill('f') << setw(10) << s#输出：fffffftest
+cout  << setfill('f') << setw(10) << s#输出：fffffftest
 
 #BHAX_Descriptor（9.12.0版本新增）
 
@@ -442,7 +442,7 @@ for v in rng：无限迭代，每次循环v都是全新的随机128位哈希
 rng.randrange()/rng.uniform()/rng.randint()/rng.getrandbits()：用法同random库
 """
 
-print(umfs(bytes(rng())).hexdigest(bitn = 4406)) #比裸调用更安全
+print(umfs(rng().encode()).hexdigest(bitn = 4406)) #比裸调用更安全
 
 #struct_array（9.13.0版本新增）
 
@@ -472,8 +472,48 @@ ps[0], ps[1] = ps[1], ps[0]      # Python 风格交换正确
 
 q = Particle(age=1, mass=1.0, name="beta")
 ps.append(q)
-ps.append({"pos": (0, 0), "age": 0, "mass": 0.0,
-           "alive": False, "color": (0, 0, 0, 255), "name": "ghost"})
+ps.append({"pos": BHA_Vec2(0, 0), "age": 0, "mass": 0.0,
+           "alive": False, "color": BHA_RGBA(0, 0, 0, 255), "name": "ghost"})
 
 for p in ps:
     p.age += 1
+
+#BHA_Dict（9.13.6版本新增）
+
+from bool_hybrid_array.struct_array import BHA_Dict
+
+d = BHA_Dict(int, str)
+
+d[1] = 'alpha'
+
+d[2] = 'beta'
+
+print(d[1])  # 输出：alpha
+
+print(list(d))  # 输出：[1, 2]（按键升序）
+
+print(len(d))  # 输出：2
+
+d[2] = 'beta2'  # 更新已有键的值
+
+print(d[2])  # 输出：beta2
+
+#StructRSBTSet（9.13.6版本新增）
+
+from bool_hybrid_array.struct_array import BHA_Point, StructRSBTSet
+
+p1 = BHA_Point(x = 1, y = 1)
+
+p2 = BHA_Point(x = 2, y = 2)
+
+s = StructRSBTSet(BHA_Point, key = lambda p: p.x, items = [p1, p2])
+
+print(p1.x in s)  # 输出：True
+
+s.add(BHA_Point(x = 3, y = 3))
+
+s.discard(p1.x)
+
+print(len(s))  # 输出：2
+
+print([(int(p.x), int(p.y)) for p in s])  # 输出：[(2, 2), (3, 3)]（按键升序）

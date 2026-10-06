@@ -14,6 +14,7 @@ import itertools,copy,sys,math,weakref,random,mmap,os,pathlib,shutil,zipfile,jso
 from itertools import dropwhile
 from functools import reduce
 import operator,ctypes,gc,abc,types
+_C_UBYTE_PTR = ctypes.POINTER(ctypes.c_ubyte)
 from functools import lru_cache
 from typing import _GenericAlias
 from typing import Callable, Union, Sequence, MutableSequence, Any, overload, Sized
@@ -141,6 +142,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             self.size = size
             self.n_uint8 = (size + 7) >> 3
             self.data = np.zeros(self.n_uint8, dtype=np.uint8)
+            self._cptr = None
 
         def _real_capacity(self) -> int:
             return len(self.data) << 3
@@ -148,10 +150,14 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         def _resize_capacity(self, want_bit_count:int):
             if want_bit_count <= self._real_capacity():
                 return
+            old_n_uint8 = len(self.data)
             old_cap_bit = self._real_capacity()
             new_cap_bit = int(old_cap_bit ** 1.01981 * 1.3654 + 94)
             new_n_uint8 = (max(new_cap_bit, want_bit_count) +7) >>3
-            self.data = np.pad(self.data, (0, new_n_uint8 - len(self.data)), mode='constant', constant_values=0)
+            self.data.resize(new_n_uint8, refcheck=False)
+            if old_n_uint8 < new_n_uint8:
+                self.data[old_n_uint8:] = 0
+            self._cptr = None
 
         def _set_single(self, index: int, value: bool, ctypes_arr):
             uint8_pos = index >> 3
@@ -165,27 +171,44 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             bit_offset = index & 7
             return bool((self.data[uint8_pos] >> bit_offset) & 1)
 
+        def _get_cptr(self):
+            if self._cptr is None:
+                self._cptr = self.data.ctypes.data_as(_C_UBYTE_PTR)
+            return self._cptr
+
+        def __getstate__(self):
+            return {'size': self.size, 'n_uint8': self.n_uint8, 'data': self.data}
+
+        def __setstate__(self, state):
+            self.size = state['size']
+            self.n_uint8 = state['n_uint8']
+            self.data = state['data']
+            self._cptr = None
+
+        def __reduce__(self):
+            return (self.__class__, (self.size,), self.__getstate__())
+
         def __setitem__(self, index: int | slice, value: Any):
-            ctypes_arr = self.data.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
+            ctypes_arr = self._get_cptr()
             if isinstance(index, slice):
                 start, stop, step = index.indices(self.size)
-                indices = list(range(start, stop, step))
-                if isinstance(value, (list, tuple)):
-                    if len(value)!= len(indices):
+                indices = range(start, stop, step)
+                if isinstance(value, Iterable):
+                    if hasattr(value, '__len__') and len(value)!= len(indices):
                         raise ValueError("值的数量与切片长度不匹配")
+                    for i, val in zip(indices, value):
+                        self._set_single(i, bool(val), ctypes_arr)
+                elif isinstance(value, (Iterator, Generator, map)):
                     for i, val in zip(indices, value):
                         self._set_single(i, bool(val), ctypes_arr)
                 else:
                     val_bool = bool(value)
                     for i in indices:
                         self._set_single(i, val_bool, ctypes_arr)
-                self.data = np.ctypeslib.as_array(ctypes_arr, shape=(len(self.data),))
                 return
             if not (0 <= index < self.size):
                 raise IndexError(f"密集区索引 {index} 超出范围 [0, {self.size})")
             self._set_single(index, bool(value), ctypes_arr)
-            self.data = np.ctypeslib.as_array(ctypes_arr, shape=(len(self.data),))
-            self.data = self.data.view()
 
         def __getitem__(self, index: int | slice) -> bool | list[bool]:
             if isinstance(index, slice):
@@ -214,15 +237,21 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
 
         def insert(self, idx:int, value:bool):
             idx = max(0, min(idx, self.size))
-            need_bits = self.size + 1
-            self._resize_capacity(need_bits)
-            ctypes_arr = self.data.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
-            for i in range(self.size -1, idx -1, -1):
-                src_bit = self._get_single(i)
-                self._set_single(i+1, src_bit, ctypes_arr)
-            self._set_single(idx, bool(value), ctypes_arr)
-            self.size +=1
-            self.data = np.ctypeslib.as_array(ctypes_arr, shape=(len(self.data),))
+            self._resize_capacity(self.size + 1)
+            bp = idx >> 3
+            bo = idx & 7
+            d = self.data
+            tail = d[bp:]
+            lo = tail[0] & ((1 << bo) - 1)
+            msbs = tail >> 7
+            tail <<= 1
+            tail[1:] |= msbs[:-1]
+            tail[0] = (tail[0] & (0xFF - ((1 << bo) - 1))) | lo
+            if value:
+                d[bp] |= (1 << bo)
+            else:
+                d[bp] &= ~(1 << bo) & 0xFF
+            self.size += 1
 
         def pop(self, idx:int = -1) -> bool:
             if self.size <=0:
@@ -230,63 +259,123 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             idx = idx if idx >=0 else idx + self.size
             if not (0 <= idx < self.size):
                 raise IndexError("pop index out of range")
-            val = self._get_single(idx)
-            ctypes_arr = self.data.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
-            for i in range(idx, self.size -1):
-                src_bit = self._get_single(i+1)
-                self._set_single(i, src_bit, ctypes_arr)
-            self.size -=1
-            self.data = np.ctypeslib.as_array(ctypes_arr, shape=(len(self.data),))
-            return val
-
+            bp = idx >> 3
+            bo = idx & 7
+            d = self.data
+            val = (d[bp] >> bo) & 1
+            tail = d[bp:]
+            lo = tail[0] & ((1 << bo) - 1)
+            lsbs = tail << 7
+            tail >>= 1
+            tail[:-1] |= lsbs[1:]
+            tail[0] = (tail[0] & (0xFF - ((1 << bo) - 1))) | lo
+            self.size -= 1
+            return bool(val)
+        def _del_range(self, start, n):
+            """批量删除 [start, start+n) 的位，后续位左移 n；大整数移位 O(尾部) 无中间数组。"""
+            if n <= 0 or start >= self.size:
+                return
+            end = self.size
+            if start + n >= end:
+                new_size = start
+                new_n = (new_size + 7) >> 3
+                if new_n:
+                    val = int.from_bytes(self.data.tobytes(), 'little')
+                    low = val & ((int(1) << start) - int(1)) if start else 0
+                    low &= (int(1) << new_size) - int(1)
+                    self.data = np.frombuffer(low.to_bytes(new_n, 'little'), dtype=np.uint8).copy()
+                else:
+                    self.data = np.zeros(0, dtype=np.uint8)
+                self.n_uint8 = len(self.data)
+                self.size = new_size
+                self._cptr = None
+                return
+            val = int.from_bytes(self.data.tobytes(), 'little')
+            low = val & ((int(1) << start) - int(1)) if start else 0
+            high = val >> (start + n)
+            new_size = end - n
+            new_val = (low | (high << start)) & ((int(1) << new_size) - int(1))
+            new_n = (new_size + 7) >> 3
+            self.data = np.frombuffer(new_val.to_bytes(new_n, 'little'), dtype=np.uint8).copy()
+            self.n_uint8 = new_n
+            self.size = new_size
+            self._cptr = None
+        def _ins_range(self, start, n):
+            """批量在 start 处插入 n 个空位（[start, size) 右移 n）；大整数移位 O(尾部) 无中间数组。"""
+            if n <= 0:
+                return
+            old_size = self.size
+            self._resize_capacity(old_size + n)
+            new_size = old_size + n
+            if old_size:
+                val = int.from_bytes(self.data.tobytes(), 'little')
+                low = val & ((int(1) << start) - int(1)) if start else 0
+                high = (val >> start) << (start + n) if start < old_size else 0
+                new_val = (low | high) & ((int(1) << new_size) - int(1))
+            else:
+                new_val = 0
+            new_n = (new_size + 7) >> 3
+            self.data = np.frombuffer(new_val.to_bytes(new_n, 'little'), dtype=np.uint8).copy()
+            self.n_uint8 = new_n
+            self.size = new_size
+            self._cptr = None
         def __delitem__(self, key:int|slice):
             if isinstance(key, slice):
                 start, stop, step = key.indices(self.size)
-                indices = list(range(start, stop, step))
-                for pos in reversed(indices):
-                    self.pop(pos)
+                if step > 0:
+                    for pos in reversed(range(start, stop, step)):
+                        self.pop(pos)
+                else:
+                    for pos in range(start, stop, step):
+                        self.pop(pos)
                 return
             idx = key if key >=0 else key + self.size
             self.pop(idx)
 
-    def __init__(self, split_index: int, size=None, is_sparse=False ,Type:Callable = None,hash_:Any = True) -> None:
-        self.Type = Type if Type is not None else builtins.BHA_Bool
-        self.split_index = int(split_index)
-        self.size = size or 0
+    def __init__(self, split_index:int=0, size:int=0, is_sparse=False ,Type:callable = None,hash_ = True) -> None:
+        self.Type = Type if Type is not None else BHA_Bool
+        self.split_index : int = int(split_index)
+        self.size : int = size or 0
         self.is_sparse = is_sparse
         self.small = self._CompactBoolArray(self.split_index + 1)
         self.small.set_all(not is_sparse)
-        self.large = array.array('I') if size < 1<<32 else array.array('Q') if size < 1 << 64 else []
-        self.generator = iter(self)
+        self.large : array.array = array.array('I') if size < 1<<32 else array.array('Q') if size < 1 << 64 else []
         self.hash_ = hash_
         if hash_:
-            for existing_array, existing_hash in hybrid_array_cache.items():
+            while True:
                 try:
-                    if self.size != existing_array.size:
-                        continue
-                    elif self == existing_array:
-                        self._cached_hash = existing_hash
-                        return
-                except Exception:
+                    for existing_array, existing_hash in hybrid_array_cache.items():
+                        try:
+                            if self.size != existing_array.size:
+                                continue
+                            elif self == existing_array:
+                                self._cached_hash = existing_hash
+                                return
+                        except Exception:
+                            continue
+                    break
+                except RuntimeError:
                     continue
-        new_hash = id(self)
-        self._cached_hash = new_hash
-        hybrid_array_cache[self] = new_hash
-
-    def __call__(self, func):
+        self._cached_hash:int = id(self)
+        if hash_:
+            hybrid_array_cache[self] = self._cached_hash
+    def __call__(self, func:callable):
         func.self = self
         def wrapper(*args, **kwargs):
             return func(self, *args, **kwargs)
         setattr(self, func.__name__, wrapper)
         return func
 
-    def resize(size):
+    def resize(self, size:int):
+        size = operator.index(size)
+        if size < 0:
+            raise ValueError(f"resize 要求 size >= 0，收到 {size}")
         self.size = size
 
     def __hash__(self):
         return self._cached_hash
 
-    def accessor(self, i: int, value: Any = None) -> Any:
+    def accessor(self, i: int, value = None):
         def _get_sparse_info(index: int) -> tuple[int, bool]:
             pos = bisect.bisect_left(self.large, index)
             exists = pos < len(self.large) and self.large[pos] == index
@@ -302,15 +391,13 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                 self.small[i] = value
                 return None
             else:
-                if self[i] == value:
-                    return
                 pos, exists = _get_sparse_info(i)
-                condition = not value or exists
+                condition = not value
                 if self.is_sparse != condition:
-                    self.large.insert(pos, i)
-                else:
-                    if pos < len(self.large):
-                        del self.large[pos]
+                    if not exists:
+                        self.large.insert(pos, i)
+                elif exists:
+                    del self.large[pos]
                 return
 
     @overload
@@ -320,11 +407,274 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __getitem__(self, key:int|slice = -1,/) -> Any:
         if isinstance(key, slice):
             start, stop, step = key.indices(self.size)
-            return BoolHybridArr((self[i] for i in range(start, stop, step)),hash_ = self.hash_)
+            if step == 1:
+                return self._slice_bits(start, stop)
+            return BoolHybridArr((self[i] for i in range(start, stop, step)), hash_=False)
         key = key if key >=0 else key + self.size
         if 0 <= key < self.size:
             return self.Type(self.accessor(key))
         raise IndexError("索引超出范围")
+
+    def _slice_bits(self, start: int, stop: int):
+        """提取 [start, stop) 位段为新 BHA（step=1，保持稀疏结构；small 大整数移位 + large bisect 切片）。"""
+        n = stop - start
+        if n <= 0:
+            return BoolHybridArr((), hash_=False)
+        split = self.split_index
+        new_arr = BoolHybridArr((), hash_=False)
+        new_arr.size = n
+        new_arr.Type = self.Type
+        new_arr.is_sparse = self.is_sparse
+        new_arr.hash_ = False
+        small_s = max(start, 0)
+        small_e = min(stop, split + 1)
+        if small_s < small_e:
+            seg_len = small_e - small_s
+            val = int.from_bytes(self.small.data.tobytes(), 'little')
+            seg_val = (val >> small_s) & ((int(1) << seg_len) - int(1))
+            new_split = small_e - start - 1
+            new_small = self._CompactBoolArray(new_split + 1)
+            new_small.set_all(not self.is_sparse)
+            nb = (new_split + 8) >> 3
+            new_small.data = np.frombuffer(seg_val.to_bytes(nb, 'little'), dtype=np.uint8).copy()
+            new_small.n_uint8 = nb
+            new_small._cptr = None
+            new_arr.small = new_small
+            new_arr.split_index = new_split
+        else:
+            new_arr.small = self._CompactBoolArray(0)
+            new_arr.split_index = -1
+        lo = bisect.bisect_left(self.large, max(start, split + 1))
+        hi = bisect.bisect_left(self.large, stop)
+        if hi > lo:
+            if isinstance(self.large, array.array):
+                new_arr.large = array.array(self.large.typecode, (x - start for x in self.large[lo:hi]))
+            else:
+                new_arr.large = [x - start for x in self.large[lo:hi]]
+        return new_arr
+
+    def _replace_bits(self, start: int, stop: int, other):
+        """等长替换 [start, stop) 位段为 other（other.size == stop-start）；small 逐位写 + large 逐位判定有序插入。"""
+        n = stop - start
+        if other.size != n:
+            raise ValueError("位段长度不匹配")
+        split = self.split_index
+        old_lo = bisect.bisect_left(self.large, max(start, split + 1))
+        old_hi = bisect.bisect_left(self.large, stop)
+        del self.large[old_lo:old_hi]
+        ss = max(start, 0)
+        se = min(stop, split + 1)
+        if ss < se:
+            off0 = ss - start
+            for off in range(off0, off0 + (se - ss)):
+                self.small[ss + off - off0] = other.accessor(off)
+        ls = max(start, split + 1)
+        le = stop
+        if ls < le:
+            o0 = ls - start
+            new_large = []
+            for off in range(o0, o0 + (le - ls)):
+                if (self.is_sparse and other.accessor(off)) or (not self.is_sparse and not other.accessor(off)):
+                    new_large.append(ls + off - o0)
+            if new_large:
+                if isinstance(self.large, array.array):
+                    self.large[old_lo:old_lo] = array.array(self.large.typecode, new_large)
+                else:
+                    self.large[old_lo:old_lo] = new_large
+
+    def _del_bits(self, start: int, stop: int):
+        """删除 [start, stop) 位段（长度变化）。small 大整数重组 + large 索引批量删并左移。"""
+        n = stop - start
+        if n <= 0:
+            return
+        split = self.split_index
+        # large 区按原始索引批量删
+        lo = bisect.bisect_left(self.large, max(start, split + 1))
+        hi = bisect.bisect_left(self.large, stop)
+        del self.large[lo:hi]
+        # large 区绝对位索引：删除区间之前的（< start）不动；之后的（≥ stop）整体左移 n 位
+        if lo < len(self.large):
+            if isinstance(self.large, array.array):
+                rest = array.array(self.large.typecode, (x - n for x in self.large[lo:]))
+                self.large = self.large[:lo] + rest
+            else:
+                self.large[lo:] = [x - n for x in self.large[lo:]]
+        # small 区大整数删除
+        ss = max(start, 0)
+        se = min(stop, split + 1)
+        if ss < se:
+            seg_len = se - ss
+            sm = self.small
+            val = int.from_bytes(sm.data.tobytes(), 'little') & ((int(1) << sm.size) - int(1))
+            seg1 = val & ((int(1) << ss) - int(1)) if ss else 0
+            seg2 = val >> se
+            new_val = seg1 | (seg2 << ss)
+            new_size = sm.size - seg_len
+            nb = (new_size + 7) >> 3
+            sm.data = np.frombuffer(new_val.to_bytes(nb, 'little'), dtype=np.uint8).copy()
+            sm.size = new_size
+            sm.n_uint8 = nb
+            sm._cptr = None
+            self.split_index -= seg_len
+        self.size -= n
+
+    def _insert_bits(self, pos: int, other):
+        """在 pos 位处插入 other 全部位（长度变化）。small 大整数插入 + large 索引平移合并。"""
+        n = other.size
+        if n <= 0:
+            return
+        split = self.split_index
+        o_val = 0
+        if other.split_index >= 0:
+            o_val = int.from_bytes(other.small.data.tobytes(), 'little') & ((int(1) << other.size) - int(1))
+        if other.is_sparse:
+            for x in other.large:
+                o_val |= int(1) << x
+        else:
+            # large 存假位：真位 = large 区全真 - 假位索引
+            o_val |= (int(1) << other.size) - (int(1) << (other.split_index + 1))
+            for x in other.large:
+                o_val &= ~(int(1) << x)
+        if pos <= split + 1:
+            # 全 small 插入：pos..pos+n 均落在新 small 区
+            sm = self.small
+            val = int.from_bytes(sm.data.tobytes(), 'little') & ((int(1) << sm.size) - int(1))
+            seg1 = val & ((int(1) << pos) - int(1)) if pos else 0
+            seg2 = val >> pos
+            new_val = seg1 | (o_val << pos) | (seg2 << (pos + n))
+            new_size = sm.size + n
+            nb = (new_size + 7) >> 3
+            sm.data = np.frombuffer(new_val.to_bytes(nb, 'little'), dtype=np.uint8).copy()
+            sm.size = new_size
+            sm.n_uint8 = nb
+            sm._cptr = None
+            self.split_index += n
+            if self.large:
+                if isinstance(self.large, array.array):
+                    self.large = array.array(self.large.typecode, (x + n for x in self.large))
+                else:
+                    self.large = [x + n for x in self.large]
+        else:
+            # large 区插入：≥pos 的索引 +n；other 位填 [pos, pos+n)
+            if self.large:
+                if isinstance(self.large, array.array):
+                    self.large = array.array(self.large.typecode, (x + n if x >= pos else x for x in self.large))
+                else:
+                    self.large = [x + n if x >= pos else x for x in self.large]
+            new_idx = []
+            for off in range(n):
+                bit = (o_val >> off) & 1
+                if (self.is_sparse and bit) or (not self.is_sparse and not bit):
+                    new_idx.append(pos + off)
+            if new_idx:
+                ins_at = bisect.bisect_left(self.large, pos)
+                if isinstance(self.large, array.array):
+                    self.large[ins_at:ins_at] = array.array(self.large.typecode, new_idx)
+                else:
+                    self.large[ins_at:ins_at] = new_idx
+        self.size += n
+
+    def swap(self, idx1, idx2):
+        n = self.size
+        idx1 = idx1 if idx1 >= 0 else idx1 + n
+        idx2 = idx2 if idx2 >= 0 else idx2 + n
+        if not (0 <= idx1 < n and 0 <= idx2 < n):
+            raise IndexError("swap index out of range")
+        if idx1 == idx2:
+            return
+        split = self.split_index
+        if idx1 <= split and idx2 <= split:
+            d = self.small.data
+            p1, o1 = idx1 >> 3, idx1 & 7
+            p2, o2 = idx2 >> 3, idx2 & 7
+            if p1 == p2:
+                b1 = (d[p1] >> o1) & 1
+                b2 = (d[p1] >> o2) & 1
+                if b1 != b2:
+                    d[p1] = (d[p1] ^ ((1 << o1) | (1 << o2))) & 0xFF
+            else:
+                b1 = (d[p1] >> o1) & 1
+                b2 = (d[p2] >> o2) & 1
+                if b1 != b2:
+                    d[p1] = ((d[p1] & ~(1 << o1) & 0xFF) | (b2 << o1)) & 0xFF
+                    d[p2] = ((d[p2] & ~(1 << o2) & 0xFF) | (b1 << o2)) & 0xFF
+            return
+        v1 = self.accessor(idx1)
+        v2 = self.accessor(idx2)
+        if v1 == v2:
+            return
+        self.accessor(idx1, v2)
+        self.accessor(idx2, v1)
+
+    def move(self, idx1, length, idx2):
+        n = self.size
+        idx1 = idx1 if idx1 >= 0 else idx1 + n
+        idx2 = idx2 if idx2 >= 0 else idx2 + n
+        idx1 = max(0, min(idx1, n))
+        length = max(0, min(length, n - idx1))
+        if length == 0:
+            return
+        idx2 = max(0, min(idx2, n - length))
+        if idx2 == idx1:
+            return
+        split = self.split_index
+        ss = split + 1
+        len_s = max(0, min(idx1 + length, ss) - idx1)
+        a_bits = 0
+        if len_s:
+            sm = self.small
+            val = int.from_bytes(sm.data.tobytes(), 'little') & ((int(1) << sm.size) - int(1))
+            a_bits = (val >> idx1) & ((int(1) << len_s) - int(1))
+        self._del_bits(idx1, idx1 + length)
+        split2 = split - len_s
+        ss2 = split2 + 1
+        len_l = length - len_s
+        special = 1 if self.is_sparse else 0
+        a_full = a_bits | ((((int(1) << len_l) - int(1)) if special else 0) << len_s)
+        if idx2 <= ss2:
+            sm = self.small
+            val = int.from_bytes(sm.data.tobytes(), 'little') & ((int(1) << sm.size) - int(1))
+            low = val & ((int(1) << idx2) - int(1)) if idx2 else 0
+            high = val >> idx2
+            new_val = low | (a_full << idx2) | (high << (idx2 + length))
+            new_size = sm.size + length
+            nb = (new_size + 7) >> 3
+            sm.data = np.frombuffer(new_val.to_bytes(nb, 'little'), dtype=np.uint8).copy()
+            sm.size = new_size
+            sm.n_uint8 = nb
+            sm._cptr = None
+            self.split_index = split2 + length
+            la = self.large
+            if la:
+                if isinstance(la, array.array):
+                    for i in range(len(la)):
+                        la[i] = la[i] + length
+                else:
+                    for i in range(len(la)):
+                        la[i] = la[i] + length
+        else:
+            la = self.large
+            if la:
+                if isinstance(la, array.array):
+                    for i in range(len(la)):
+                        if la[i] >= idx2:
+                            la[i] = la[i] + length
+                else:
+                    for i in range(len(la)):
+                        if la[i] >= idx2:
+                            la[i] = la[i] + length
+            new_idx = []
+            for off in range(length):
+                bit = (a_full >> off) & 1
+                if (self.is_sparse and bit) or (not self.is_sparse and not bit):
+                    new_idx.append(idx2 + off)
+            if new_idx:
+                ins_at = bisect.bisect_left(self.large, idx2)
+                if isinstance(self.large, array.array):
+                    self.large[ins_at:ins_at] = array.array(self.large.typecode, new_idx)
+                else:
+                    self.large[ins_at:ins_at] = new_idx
+        self.size += length
 
     def __setitem__(self, key: int | slice, value:Any) -> None:
         if isinstance(key, int):
@@ -334,6 +684,15 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             self.accessor(adjusted_key, bool(value))
             return
         if isinstance(key, slice):
+            if not hasattr(value, '__iter__'):
+                start, stop, step = key.indices(self.size)
+                if step != 1:
+                    for i in range(start, stop, step):
+                        self[i] = bool(value)
+                    return
+                for i in range(start, stop):
+                    self[i] = bool(value)
+                return
             original_size = self.size
             start, stop, step = key.indices(original_size)
             value_list = list(value)
@@ -376,8 +735,12 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __delitem__(self, key: int|slice = -1,/) -> None:
         if isinstance(key, slice):
             start, stop, step = key.indices(self.size)
-            for i in reversed(range(start,stop,step)):
-                del self[i]
+            if step > 0:
+                for i in reversed(range(start,stop,step)):
+                    del self[i]
+            else:
+                for i in range(start,stop,step):
+                    del self[i]
             return
         key = key if key >= 0 else key + self.size
         if not (0 <= key < self.size):
@@ -396,19 +759,28 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             for i in range(adjust_pos, len(self.large)):
                 self.large[i] -= 1
         self.size -= 1
-    def compare(self, other):
+        if self.size == 0:
+            self.split_index = 0
+            del self.large[:]
+            self.small = self._CompactBoolArray(1)
+            self.small.set_all(not self.is_sparse)
+        elif self.split_index < 0:
+            self.split_index = 0
+            self.small = self._CompactBoolArray(1)
+            self.small.set_all(not self.is_sparse)
+            if self.large and self.large[0] == 0:
+                self.small[0] = self.is_sparse
+                self.large.pop(0)
+    def compare(self, other:Iterable):
         if not isinstance(other, Iterable):
             return NotImplemented
-        # 用普通生成器逐位取，避免直接持有 iter(self) 返回的 BHA_Iterator；
-        # any 之后再包 BHA_Iterator，其内部 tee 的副本从第一个 True 之后开始，
-        # 耗尽重建不会回退到前导零。
-        it_self = (v for v in self)
-        it_other = (v for v in other)
+        it_self = map(operator.itemgetter(0), zip(self))
+        it_other = map(operator.itemgetter(0), zip(other))
         a,b = any(it_self),any(it_other)
         if not(a and b):
-            if a: return 1      # self 非零, other 全零
-            if b: return -1     # self 全零, other 非零
-            return 0            # 两边都全零，相等
+            if a: return 1
+            if b: return -1
+            return 0
         it_self,it_other = BHA_Iterator(it_self),BHA_Iterator(it_other)
         l1 = sum(1 for _ in it_self)
         l2 = sum(1 for _ in it_other)
@@ -439,14 +811,17 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         if not self:return BHA_Iterator([])
         return BHA_Iterator(map(self.__getitem__,range(self.size-1,-1,-1)))
 
-    def insert(self, key: int, value: Any) -> None:
+    def __deepcopy__(self, memo):
+        return BoolHybridArr(self, hash_ = False)
+
+    def insert(self, key: int, value) -> None:
         value = bool(value)
         key = key if key >= 0 else key + self.size
         key = max(0, min(key, self.size))
         if key <= self.split_index:
             self.small.insert(key, value)
             old_split = self.split_index
-            self.split_index = min(self.split_index + 1, len(self.small) - 1)
+            self.split_index = min(self.split_index + 1, len(self.small) - 1, max(0, self.size))
             for i in range(len(self.large)):
                 self.large[i] += 1
         else:
@@ -464,11 +839,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         if not self:return BHA_Iterator([])
         return BHA_Iterator(map(self.__getitem__,itertools.takewhile(lambda x: x < self.size, itertools.count(0))))
 
-    def __next__(self):
-        return next(self.generator)
-
     def __contains__(self, value:Any) -> bool:
-        if not isinstance(value, (bool,np.bool_,self.Type,BHA_bool)):return False
+        if not (value == True or value == False): return False
         if not self.size:return False
         for i in range(30):
             if self.small[random.randrange(0,self.small.size)] == value:
@@ -478,7 +850,6 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             return self.large or any(b)
         else:
             return (len(self.large) == self.size+~self.split_index and self.large) or any(b)
-
     def __bool__(self) -> bool:
         return bool(self.size)
 
@@ -491,9 +862,17 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def __eq__(self, other) -> bool:
         if not isinstance(other, Iterable):
             return NotImplemented
-        if len(self) != len(other) if hasattr(other, "__len__") else len(self) != len(BHA_Iterator(other)):
+        if hasattr(other, '__len__'):
+            if len(self) != len(other):
+                return False
+            return all(map(operator.eq, self, other))
+        it0 = iter(other)
+        if isinstance(it0, BHA_Iterator):
+            it0 = it0.data
+        a, b = itertools.tee(it0, 2)
+        if len(self) != sum(1 for _ in a):
             return False
-        return all(map(operator.eq, self, other))
+        return all(map(operator.eq, self, b))
 
     def __ne__(self, other) -> bool:
         return not self == other
@@ -513,7 +892,10 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             return 0
         return reduce(lambda acc, val: operator.or_(operator.lshift(acc, 1), int(val)),self,0)
 
-    def __or__(self, other) -> BoolHybridArray:
+    def __index__(self):
+        return int(self)
+
+    def __or__(self, other:Iterable) -> BoolHybridArray:
         if type(other) == int:
             other = abs(other)
             other = map(int,f"{other:0{self.size}b}")
@@ -522,15 +904,15 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         if len(self) != len(other):
             raise ValueError(f"或运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.or_, self, other),hash_ = self.hash_)
-    def __ror__(self, other) -> BoolHybridArray:
+    def __ror__(self, other:Iterable) -> BoolHybridArray:
         return self | other
 
-    def __rshift__(self, other) -> BoolHybridArray:
+    def __rshift__(self, other:int) -> BoolHybridArray:
         arr = BoolHybridArr(self)
         arr >>= other
         return arr
 
-    def __irshift__(self, other) -> BoolHybridArray:
+    def __irshift__(self, other:int) -> BoolHybridArray:
         if int(other) < 0:
             self <<= -other
             return self
@@ -540,31 +922,30 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             self.pop(-1)
         return self
 
-    def __ilshift__(self ,other) -> BoolHybridArray:
+    def __ilshift__(self ,other:int) -> BoolHybridArray:
         if int(other) < 0:
             self >>= -other
             return self
         if not self.is_sparse:
-            self += FalsesArray(int(other))
+            self += FalsesArray(int(other), hash_=False)
         else:
             self.size += int(other)
         return self
 
-    def __lshift__(self ,other) -> BoolHybridArray:
+    def __lshift__(self ,other:int) -> BoolHybridArray:
         if int(other) < 0:
             return self >> -other
         return self+FalsesArray(int(other))
 
-    def __add__(self, other) -> BoolHybridArray:
+    def __add__(self, other:Iterable) -> BoolHybridArray:
         arr = self.copy()
         arr += other
-        arr.optimize()
         return arr
 
-    def __rand__(self, other) -> BoolHybridArray:
+    def __rand__(self, other:Iterable) -> BoolHybridArray:
         return self & other
 
-    def __xor__(self, other) -> BoolHybridArray:
+    def __xor__(self, other:Iterable) -> BoolHybridArray:
         if type(other) == int:
             other = abs(other)
             other = map(int,f"{other:0{self.size}b}")
@@ -574,17 +955,26 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             raise ValueError(f"异或运算要求数组长度相同（{len(self)} vs {len(other)}）")
         return BoolHybridArr(map(operator.xor, self, other),hash_ = self.hash_)
 
-    def __rxor__(self, other) -> BoolHybridArray:
+    def __rxor__(self, other:Iterable) -> BoolHybridArray:
         return self^other
 
-    def __invert__(self) -> BoolHybridArray:
+    def __invert__(self:Iterable) -> BoolHybridArray:
         return BoolHybridArr(not a for a in self)
 
     def copy(self) -> BoolHybridArray:
-        arr = BoolHybridArray(split_index = self.split_index,size = self.size)
+        arr = BoolHybridArray(hash_ = False)
         arr.large,arr.small,arr.split_index,arr.is_sparse,arr.Type,arr.size = (array.array(self.large.typecode, self.large),self.small.copy(),
         self.split_index,BHA_Bool(self.is_sparse),self.Type,self.size)
+        arr.hash_ = self.hash_
+        if self.hash_:
+            arr._cached_hash = self._cached_hash
+            hybrid_array_cache[arr] = self._cached_hash
         return arr
+
+    def view(self):
+        tmp = TruesArray(0)
+        tmp.__dict__ = self.__dict__
+        return tmp
 
     def __copy__(self) -> BoolHybridArray:
         return self.copy()
@@ -617,7 +1007,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     @staticmethod
     def _strip_leading_zeros(x):
         """去掉前导零；全零返回空数组（0 的规范表示）。"""
-        bs = [1 if v else 0 for v in x]
+        bs = BoolHybridArr(x)
         i = 0
         while i < len(bs) and bs[i] == 0:
             i += 1
@@ -628,7 +1018,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         """二进制长除法：返回 a // b（商），要求 b != 0 且隐式 a >= 0。"""
         if int(b) == 0:
             raise ZeroDivisionError("真整除：除数为 0")
-        quotient = []
+        quotient = BoolHybridArr([])
         rem = BoolHybridArr([])
         for bit in a:
             # rem = rem * 2 + bit（末尾接一个 bit）；每步都规范化，去掉前导零，
@@ -656,21 +1046,16 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         return BoolHybridArr(x)
 
     def add(self, other):
-        """真加法：把 self 与 other 当作二进制数按位相加（带进位），返回新数组。
-        区别于 .__add__ / + ：那是拼接。"""
         return self._add(self, self._as_bits(other))
 
     def sub(self, other):
-        """真减法：self - other（二进制数，带借位），要求 self >= other。"""
         return self._sub(self, self._as_bits(other))
 
     def div(self, other):
-        """真整除：self // other（二进制长除法，返回商）。"""
         return self._div(self, self._as_bits(other))
 
     def __mul__(self, arr2):
         if isinstance(arr2, int):
-            # 拼接语义：把自身重复 n 次；n <= 0 返回空数组（对齐 list 行为）
             n = arr2
             if n <= 0:
                 return BoolHybridArr([])
@@ -685,7 +1070,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         len1, len2 = len(self), len(arr2)
 
         if len1 < 64 or len2 < 64:
-            result = FalsesArray(len1 + len2)
+            result = FalsesArray(len1 + len2, hash_=False)
             for i in range(len1 - 1, -1, -1):
                 if not self[i]:
                     continue
@@ -741,6 +1126,47 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         self.size += 1
         self[-1] = v
 
+    def swap(self, idx1, idx2):
+        """交换两个元素（bool 单值，无编解码成本）。"""
+        n = self.size
+        if idx1 < 0:
+            idx1 += n
+        if idx2 < 0:
+            idx2 += n
+        if not (0 <= idx1 < n and 0 <= idx2 < n):
+            raise IndexError("swap index out of range")
+        if idx1 == idx2:
+            return
+        self[idx1], self[idx2] = self[idx2], self[idx1]
+
+    def move(self, idx1, length, idx2):
+        """memmove 式：把 [idx1, idx1+length) 移到 [idx2, idx2+length)，长度不变，重叠安全。"""
+        n = self.size
+        if idx1 < 0:
+            idx1 += n
+        if idx2 < 0:
+            idx2 += n
+        idx1 = max(0, min(idx1, n))
+        length = max(0, min(length, n - idx1))
+        if length == 0:
+            return
+        idx2 = max(0, min(idx2, n - length))
+        if idx2 == idx1:
+            return
+        # small 区内：批量位搬移（一次向量化），避免逐元素 pop/insert
+        if idx1 + length <= self.split_index + 1 and idx2 + length <= self.split_index + 1:
+            sm = self.small
+            chunk = np.unpackbits(sm.data, bitorder='little')[:sm.size][idx1:idx1 + length].copy()
+            sm._del_range(idx1, length)
+            sm._ins_range(idx2, length)
+            cptr = sm._get_cptr()
+            for i, v in enumerate(chunk):
+                sm._set_single(idx2 + i, bool(v), cptr)
+            return
+        chunk = self[idx1:idx1 + length]
+        del self[idx1:idx1 + length]
+        self[idx2:idx2] = chunk
+
     push = append
     peek = __getitem__
     top = property(peek)
@@ -748,22 +1174,19 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     rear = top
     enqueue = push
 
-    def index(self, value) -> int:
+    def index(self, value, start=0, stop=None) -> int:
         if self.size == 0:
             raise ValueError('无法在空的 BoolHybridArray 中查找元素！')
         value = bool(value)
-        x = 'not find'
-        for i in range(self.size):
+        n = self.size
+        if stop is None:
+            stop = n
+        start = max(0, start if start >= 0 else start + n)
+        stop = min(n, stop if stop >= 0 else stop + n)
+        for i in range(start, stop):
             if self[i] == value:
                 return i
-            if self[-i] == value:
-                x = self.size-i
-            if len(self)-i <= i:
-                break
-        if x != 'not find':
-            return x
         raise ValueError(f"{value} not in BoolHybridArray")
-
     def rindex(self, value) -> int:
         if self.size == 0:
             raise ValueError('无法在空的 BoolHybridArray 中查找元素！')
@@ -773,7 +1196,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             if self[~i] == value:
                 return self.size + ~i
             if self[i] == value:
-                x = i - self.size
+                x = i
             if len(self)-i <= i:
                 break
         if x != 'not find':
@@ -782,7 +1205,18 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
 
     def count(self, value) -> int:
         value = bool(value)
-        return sum(v == value for v in self)
+        if not self.size: return 0
+        scan_n = min(self.split_index + 1, self.size)
+        c = 0
+        if scan_n > 0:
+            for i in range(scan_n):
+                if self.small[i] == value:
+                    c += 1
+        if value == (not self.is_sparse):
+            c += max(0, self.size - self.split_index - 1 - len(self.large))
+        else:
+            c += len(self.large)
+        return c
 
     def optimize(self,*a,**k) -> BoolHybridArray:
         arr = BoolHybridArr(self,*a,**k)
@@ -880,21 +1314,32 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
             return arr
         a = isinstance(lst, (Iterator, Generator, map)) and not isinstance(lst, BoolHybridArray)
         if a:
-            lst = BHA_Iterator(lst)
-            size = sum(1 for _ in lst)
-            true_count = sum(bool(val) for val in lst)
+            values = array.array('b')
+            true_pos = array.array('I')
+            false_pos = array.array('I')
+            size = 0
+            true_count = 0
+            for i, val in enumerate(lst):
+                b = 1 if val else 0
+                values.append(b)
+                size += 1
+                if b:
+                    true_count += 1
+                    true_pos.append(i)
+                else:
+                    false_pos.append(i)
         else:
             size = len(lst)
             true_count = sum(bool(val) for val in lst)
         if not size:
-            return BoolHybridArray(0, 0, is_sparse=False if is_sparse is None else is_sparse)
+            return BoolHybridArray(0, 0, is_sparse=False if is_sparse is None else is_sparse, hash_=hash_)
         if split_index is None:
             C = 4 if size < (1 << 32) else 8
             running_true = 0
             min_cost = float('inf')
             best_split = 0
             best_is_sparse = is_sparse
-            val_iter = iter(lst)
+            val_iter = iter(values) if a else iter(lst)
             for s, val in enumerate(val_iter):
                 small_cost = s + 7 >> 3
                 seg_true = true_count - running_true - bool(val)
@@ -925,51 +1370,58 @@ class BoolHybridArr(BoolHybridArray,metaclass=ResurrectMeta):
         arr = BoolHybridArray(split_index = split_index, size = size, is_sparse = is_sparse, Type = Type, hash_ = F)
         small_max_idx = min(split_index, size - 1)
         if a:
-            small_data = []
-            large_indices = []
-            for i, val in enumerate(lst):
-                val_bool = bool(val)
-                if i <= small_max_idx:
-                    small_data.append(val_bool)
-                else:
-                    if (is_sparse and val_bool) or (not is_sparse and not val_bool):
-                        large_indices.append(i)
-            if small_data:
-                arr.small[:len(small_data)] = small_data
-            if large_indices:
-                arr.large.extend(large_indices)
+            if small_max_idx >= 0:
+                arr.small[:small_max_idx + 1] = values[:small_max_idx + 1]
+            if size >= 1 << 32:
+                true_pos = array.array('Q', true_pos)
+                false_pos = array.array('Q', false_pos)
+            if is_sparse:
+                arr.large.extend(true_pos[bisect.bisect_right(true_pos, split_index):])
+            else:
+                arr.large.extend(false_pos[bisect.bisect_right(false_pos, split_index):])
         else:
             if small_max_idx >= 0:
-                arr.small[:small_max_idx + 1] = [bool(val) for val in lst[:small_max_idx + 1]]
-            large_indices = [
+                arr.small[:small_max_idx + 1] = map(bool, itertools.islice(lst, small_max_idx + 1))
+            large_indices = (
                 i for i in range(split_index + 1, size)
                 if (is_sparse and bool(lst[i])) or (not is_sparse and not bool(lst[i]))
-            ]
+            )
             arr.large.extend(large_indices)
         arr.large = sorted(arr.large)
         type_ = 'I' if size < 1 << 32 else 'Q'
         arr.large = array.array(type_, arr.large) if size < 1 << 64 else list(arr.large)
         if hash_:
-            for existing_array, existing_hash in hybrid_array_cache.items():
+            while True:
                 try:
-                    if arr.size != existing_array.size:
-                        continue
-                    elif arr == existing_array:
-                        arr._cached_hash = existing_hash
-                        return arr
-                except Exception:
+                    for existing_array, existing_hash in hybrid_array_cache.items():
+                        try:
+                            if arr.size != existing_array.size:
+                                continue
+                            elif arr == existing_array:
+                                arr._cached_hash = existing_hash
+                                return arr
+                        except Exception:
+                            continue
+                    break
+                except RuntimeError:
                     continue
-        new_hash = id(arr)
-        arr._cached_hash = new_hash
-        hybrid_array_cache[arr] = new_hash
+        arr._cached_hash = id(arr)
+        if hash_:
+            hybrid_array_cache[arr] = arr._cached_hash
         return arr
 
 def TruesArray(size, Type = None, hash_ = True):
+    size = operator.index(size)
+    if size < 0:
+        raise ValueError(f"size 必须大于等于 0，收到 {size}")
     split_index = min(size >> 4, math.isqrt(size))
     split_index = max(split_index, 1)
     split_index = int(split_index) if split_index < 150e+7*2 else int(145e+7*2)
     return BoolHybridArray(split_index,size,Type = Type,hash_ = hash_)
 def FalsesArray(size, Type = None,hash_ = True):
+    size = operator.index(size)
+    if size < 0:
+        raise ValueError(f"size 必须大于等于 0，收到 {size}")
     split_index = min(size >> 4, math.isqrt(size))
     split_index = max(split_index, 1)
     split_index = int(split_index) if split_index < 150e+7*2 else int(145e+7*2)
@@ -977,6 +1429,7 @@ def FalsesArray(size, Type = None,hash_ = True):
 Bool_Array = np.arange(2,dtype = np.uint8)
 class BHA_bool(int,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
+    @lru_cache
     def __new__(cls, value):
         core_value = bool(value)
         instance = super().__new__(cls, core_value)
@@ -1009,14 +1462,15 @@ class BHA_bool(int,metaclass=ResurrectMeta):
     def __len__(self):
         raise TypeError("'BHA_bool' object has no attribute '__len__'")
     __rand__,__ror__,__rxor__ = __and__,__or__,__xor__
+T,F = BHA_bool(1),BHA_bool(0)
 class BHA_Bool(BHA_bool,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     @lru_cache
     def __new__(cls,v):
-        return builtins.T if v else builtins.F
+        return T if v else F
 class BHA_List(list,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
-    def __init__(self,arr):
+    def __init__(self, arr=()):
         from .float_array import FloatHybridArray
         def Temp(v):
             if isinstance(v,(list,tuple)):
@@ -1031,7 +1485,7 @@ class BHA_List(list,metaclass=ResurrectMeta):
                 return v
         super().__init__(map(Temp,arr))
         try:self.hash_value = sum(map(hash,self))
-        except Exception as e:return hash(e)
+        except Exception:self.hash_value = 0
     def __hash__(self):
         return self.hash_value
     def __call__(self, func):
@@ -1051,6 +1505,8 @@ class BHA_List(list,metaclass=ResurrectMeta):
         return str(self)
     def __or__(self,other):
         return BHA_List(map(operator.or_, self, other))
+    def __reduce__(self):
+        return (BHA_List, (list(self),))
     def __and__(self,other):
         return BHA_List(map(operator.and_, self, other))
     def __xor__(self,other):
@@ -1085,17 +1541,22 @@ class BHA_List(list,metaclass=ResurrectMeta):
 class BHA_Iterator(Iterator,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     def __init__(self,data):
-        self.data,self.copy_data = itertools.tee(iter(data),2)
+        if isinstance(data, BHA_Iterator):
+            self.data, data.data, self.copy_data = itertools.tee(data.data, 3)
+        else:
+            itd = iter(data)
+            if isinstance(itd, BHA_Iterator):
+                self.data, self.copy_data = itertools.tee(itd.data, 2)
+            else:
+                self.data, self.copy_data = itertools.tee(itd, 2)
     def __len__(self):
-        self.copy_data,it = itertools.tee(self.copy_data,2)
+        self.copy_data, it = itertools.tee(self.copy_data, 2)
         return sum(1 for _ in it)
     def __next__(self):
-        try:return next(self.data)
+        try:
+            return next(self.data)
         except StopIteration:
-            while 1:
-                try:self.__init__(self.copy_data)
-                except BaseException:continue
-                else:break
+            self.data, self.copy_data = itertools.tee(self.copy_data, 2)
             raise
     def __iter__(self):
         return self
@@ -1122,7 +1583,58 @@ class BHA_string(metaclass = ResurrectMeta):
         return self._buf.decode("utf-8", errors="replace")
 
     def __repr__(self) -> str:
-        return f'BHA_string("{str(self)}")'
+        return f'BHA_string({str(self)!r})'
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, BHA_string):
+            return self._buf == other._buf
+        if isinstance(other, str):
+            return self._buf == bytearray(other.encode("utf-8"))
+        if isinstance(other, (bytes, bytearray)):
+            return self._buf == bytearray(other)
+        return NotImplemented
+
+    def __ne__(self, other) -> bool:
+        r = self.__eq__(other)
+        if r is NotImplemented:
+            return r
+        return not r
+
+    def _coerce(self, other):
+        if isinstance(other, BHA_string):
+            return bytes(other._buf)
+        if isinstance(other, str):
+            return other.encode("utf-8")
+        if isinstance(other, (bytes, bytearray)):
+            return bytes(other)
+        return NotImplemented
+
+    def __lt__(self, other) -> bool:
+        o = self._coerce(other)
+        if o is NotImplemented:
+            return NotImplemented
+        return bytes(self._buf) < o
+
+    def __le__(self, other) -> bool:
+        o = self._coerce(other)
+        if o is NotImplemented:
+            return NotImplemented
+        return bytes(self._buf) <= o
+
+    def __gt__(self, other) -> bool:
+        o = self._coerce(other)
+        if o is NotImplemented:
+            return NotImplemented
+        return bytes(self._buf) > o
+
+    def __ge__(self, other) -> bool:
+        o = self._coerce(other)
+        if o is NotImplemented:
+            return NotImplemented
+        return bytes(self._buf) >= o
+
+    def __hash__(self) -> int:
+        return hash(bytes(self._buf))
 
     def __len__(self) -> int:
         return len(self._buf)
@@ -1143,6 +1655,9 @@ class BHA_string(metaclass = ResurrectMeta):
         else:
             raise TypeError("in support str/bytes/bytearray/BHA_string")
         return target in self._buf
+
+    def __cin__(self, stream) -> None:
+        self._buf = bytearray(stream.getline().encode("utf-8"))
 
     def write(self, s: str | bytes | bytearray | "BHA_string") -> int:
         if isinstance(s, BHA_string):
@@ -1197,10 +1712,11 @@ C4 = 0x233333
 C5 = 0x666666
 C6 = 0x123456789
 
-def fast_pow(x, e):
+def fast_pow(x : int, e : int):
     return pow(x, e, M)
 
-def tenth_order_mapping(x):
+def tenth_order_mapping(x : int):
+    x %= M
     x = (fast_pow(x, 210) + fast_pow(210, x) + fast_pow(x, x) - 1) & M
     x = fast_pow(x, E1) ^ C1
     x = (fast_pow(x, E2) + C2) & M
@@ -1219,16 +1735,18 @@ def tenth_order_mapping(x):
     return x % M
 
 class UltraMersenneFractalSponge(metaclass =  ResurrectMeta):
-    __slots__ = ('r','c','total_len','data_pool')
+    __slots__ = ('r','c','total_len','data_pool','_bts')
     def __init__(self,data = None):
         self.r = IV_R
         self.c = IV_C
         self.total_len = 0
         self.data_pool = []
-        self.absorb(data) if data != None else self
+        self._bts = data
     def absorb(self, data: bytes):
+        if not data:
+            return self
         self.total_len += len(data)
-        step = max(8, int(len(data)))
+        step = len(data) // len(data).bit_length()
         for i in range(0, len(data), step):
             chunk = data[i:i+step]
             num = int.from_bytes(chunk, "big")
@@ -1237,7 +1755,8 @@ class UltraMersenneFractalSponge(metaclass =  ResurrectMeta):
             term = (pow(num, 7, M) * self.r) % M
             self.c = (self.c ^ self.r + term) % M
         return self
-    update = absorb
+    def update(self,bts):
+        self._bts += bts
     def digest(self,*a,**k):
         return bytes.fromhex(self.hexdigest(*a,**k))
     def _fold_recursive(self, arr):
@@ -1254,6 +1773,9 @@ class UltraMersenneFractalSponge(metaclass =  ResurrectMeta):
         cross = (left * right ^ l3 + r3) % M
         return tenth_order_mapping(cross)
     def hexdigest(self,bitn = 256):
+        if self._bts:
+            self.absorb(self._bts)
+            self._bts = None
         if bitn > 4562:
             s = ""
             while bitn >= 4096:
@@ -1516,11 +2038,15 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
 
         if typ == "bool":
             _, hex_total, hex_data = parts
+            if not hex_data:
+                return BoolHybridArr(split_index=0)
             return temp2(hex_data)
         elif typ == "int":
             _, hex_total, hex_bitlen, hex_data = parts
             elem_cnt = int(hex_total, 16)
             bit_len = int(hex_bitlen, 16)
+            if not hex_data or elem_cnt == 0:
+                return IntHybridArray([])
             ba = temp2(hex_data)
             int_list = _bhax_decode_int_bits(ba, bit_len, elem_cnt)
             return IntHybridArray(int_list, bit_length=bit_len)
@@ -1679,6 +2205,8 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
         fd = os.open(self._root, os.O_RDONLY)
         try:
             size = os.fstat(fd).st_size
+            if size == 0:
+                return BHA_List([])
             mm = mmap.mmap(fd, size, access=mmap.ACCESS_READ)
             try:
                 if not hasattr(mm, 'seekable'):
@@ -1715,29 +2243,26 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
         return f"<BHAX_Descriptor dataset_root='{self._root}'>"
 
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
-    def __init__(self, *args, protected_names = (("T", "F","Ask_arr","Ask_BHA","Create_BHA","temp2","BHA_Queue","numba_opt","namespace")+tuple(globals())),
-                 name = 'builtins', **kwargs):
-        super().__init__(*args, **kwargs)
+    def __new__(cls, *args, protected_names = (("T", "F","Ask_arr","Ask_BHA","Create_BHA","temp2","BHA_Queue","numba_opt","namespace")+tuple(globals())),
+                name = 'builtins', **kwargs):
+        self = super().__new__(cls)
+        dict.__init__(self, *args, **kwargs)
         if name == 'builtins':
-            super().__setattr__('__dict__',self)
-            super().__setattr__('builtins',self)
-            super().__setattr__('__builtins__',self)
+            object.__setattr__(self,'builtins',self)
+            object.__setattr__(self,'__builtins__',self)
         self.name = name
-        super().__setattr__("protected_names",protected_names)
+        object.__setattr__(self,"protected_names",protected_names)
+        return self
+    def __init__(self, *args, **kwargs):
+        pass
+    def __reduce__(self):
+        return (ProtectedBuiltinsDict, (dict(self),), {"protected_names": self.protected_names, "name": self.name})
     def __setitem__(self, name, value):
         if not hasattr(self,"protected_names"):
             super().__setitem__(name, value)
             return
         try:
-            if name in ["T", "F"]:
-                current_T = self.get("T")
-                current_F = self.get("F")
-                if isinstance(current_T, BHA_bool) and isinstance(current_F, BHA_bool):
-                    is_swap = (name == "T" and isinstance(value, BHA_bool) and value.value == current_F.value)or(name == "F" and isinstance(value, BHA_bool) and value.value == current_T.value)
-                    if is_swap:
-                        print(f"""\033[31m警告：禁止交换内置常量 __{self.name}__["{name}"] 和 __builtins__["{'F' if name == 'T' else 'T'}"]！\033[0m""")
-                        raise AttributeError(f"""禁止交换内置常量 __{self.name}__["{name}"] 和 __{self.name}__["{'F' if name == 'T' else 'T'}"]""")
-            if name in self.protected_names and name not in ["T", "F"]:
+            if name in self.protected_names:
                 print(f"\033[31m警告：禁止修改内置常量 __{self.name}__['{name}']！\033[0m")
                 raise AttributeError(f"禁止修改内置常量 __{self.name}__['{name}']")
         except:
@@ -1746,15 +2271,18 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
         else:super().__setitem__(name, value)
     def __delitem__(self, name):
         if name in self.protected_names:
-            print(f"\033[31m警告：禁止删除内置常量 __builtins__['{name}']！\033[0m")
-            raise AttributeError(f"禁止删除内置常量 __builtins__['{name}']")
+            print(f"\033[31m警告：禁止删除内置常量 __{self.name}__['{name}']！\033[0m")
+            raise AttributeError(f"禁止删除内置常量 __{self.name}__['{name}']")
         if name in self:
             super().__delitem__(name)
     def __delattr__(self, name):
         if name in self.protected_names:
             raise AttributeError(f'禁止删除内置常量：{self.name}.{name}')
-        else:
-            del self[name]
+        try:
+            object.__delattr__(self, name)
+        except AttributeError:
+            if name in self:
+                del self[name]
     def __getattr__(self, name):
         try:
             return super().__getattribute__(name)
@@ -1765,6 +2293,8 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
     def __setattr__(self,name,value):
         try:protected = self.protected_names
         except Exception:protected = self
+        if name == 'protected_names':
+            raise AttributeError(f'禁止修改内置常量：{self.name}.{name}')
         if(name in protected)and(not sys.is_finalizing())and(name != '_'):
             raise AttributeError(f'禁止修改内置常量：{self.name}.{name}')
         else:
@@ -1778,10 +2308,44 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
                 result.append(self[key])
             return result[0] if len(result) == 1 else tuple(result)
         return self
+    def clear(self):
+        if any(k in self.protected_names for k in self):
+            raise AttributeError(f"禁止删除内置常量 __{self.name}__")
+        super().clear()
+    def pop(self, name, *args):
+        if name in self.protected_names:
+            raise AttributeError(f"禁止删除内置常量 __{self.name}__['{name}']")
+        return super().pop(name, *args)
+    def popitem(self):
+        if any(k in self.protected_names for k in self):
+            raise AttributeError(f"禁止删除内置常量 __{self.name}__")
+        return super().popitem()
+    def update(self, *args, **kwargs):
+        items = {}
+        if args:
+            src = args[0]
+            if hasattr(src, 'keys'):
+                items.update(src)
+            else:
+                items.update(dict(src))
+        items.update(kwargs)
+        for name, value in items.items():
+            if name in self.protected_names:
+                raise AttributeError(f"禁止修改内置常量 __{self.name}__['{name}']")
+            self[name] = value
+    def setdefault(self, name, *args):
+        if name in self.protected_names:
+            raise AttributeError(f"禁止修改内置常量 __{self.name}__['{name}']")
+        return super().setdefault(name, *args)
+    def __ior__(self, other):
+        self.update(other)
+        return self
 def Ask_arr(arr):
     if isinstance(arr,BHA_List):
         return '\n'.join(map(Ask_arr,arr))
     elif isinstance(arr,BoolHybridArray):
+        if arr.size == 0:
+            return ''
         h = hex(int(arr))[2:]
         h = '0'*(arr.size - len(bin(int(arr)))+2)+h
         return h
@@ -1831,7 +2395,7 @@ class BHA_Queue(Collection, metaclass=ResurrectMeta):
     def __contains__(self,v):
         return v in self.a or v in self.b
     def enqueue(self, v):
-        self.a.push(v)
+        self.a.append(v)
     def dequeue(self):
         if self.b:
             return self.b.pop()
@@ -1853,7 +2417,7 @@ class BHA_Queue(Collection, metaclass=ResurrectMeta):
     put = append = enqueue
     get = popleft = dequeue
     def appendleft(self, v):
-        self.b.push(v)
+        self.b.append(v)
     def pop(self):
         if self.a:
             return self.a.pop()
@@ -1868,6 +2432,7 @@ class BHA_Queue(Collection, metaclass=ResurrectMeta):
 def Create_BHA(path,arr,mode = "BHA"):
     if mode.lower() == "bhax":
         BHAX_Descriptor(path).write_data(arr)
+        return
     if not path.lower().endswith('.bha'):
         path += '.bha'
     temp = Ask_arr(arr).strip().encode('utf-8')
@@ -1884,28 +2449,31 @@ def Create_BHA(path,arr,mode = "BHA"):
             mm.flush()
 def numba_opt():
     import numba
-    sig = numba.types.Union([
-        numba.types.intp(
-            numba.types.Array(numba.types.uint32, 1, 'C'),
-            numba.types.uint32,
-            numba.types.uint32,
-            numba.types.Optional(numba.types.uint32)
-        ),
-        numba.types.intp(
-            numba.types.Array(numba.types.uint64, 1, 'C'),
-            numba.types.uint64,
-            numba.types.uint64,
-            numba.types.Optional(numba.types.uint64)
-        ),
-        numba.types.intp(
-            numba.types.Any,
-            numba.types.Any,
-            numba.types.Any,
-            numba.types.Optional(numba.types.Any)
-        )
-    ])
-    bisect.bisect_left = numba.njit(sig, cache=True,wraparound=True)(bisect.bisect_left)
-    bisect.bisect_right = numba.njit(sig, cache=True,wraparound=True)(bisect.bisect_right)
+    g = globals()
+    updated = []
+    for name, obj in list(g.items()):
+        if name.startswith("__"):
+            continue
+        if isinstance(obj, (numba.core.registry.CPUDispatcher, numba.core.types.npytypes.NumbaType)):
+            continue
+        if inspect.isfunction(obj):
+            try:
+                wrapped = numba.jit(nopython=False)(obj)
+                g[name] = wrapped
+                updated.append(f"func: {name}")
+            except BaseException as e:traceback.print_exception(type(e), e, e.__traceback__)
+        elif inspect.isclass(obj):
+            if obj.__module__ == __name__:
+                for attr_name, attr_val in list(obj.__dict__.items()):
+                    if inspect.isfunction(attr_val):
+                        try:
+                            wrapped_method = numba.jit(nopython=False)(attr_val)
+                            setattr(obj, attr_name, wrapped_method)
+                            updated.append(f"class {obj.__name__}.{attr_name}")
+                        except BaseException as e:traceback.print_exception(type(e), e, e.__traceback__)
+    print(f"numba jit完成，共处理 {len(updated)} 个对象：")
+    for s in updated:
+        print(" -", s)
 class namespace(ProtectedBuiltinsDict):
     def __new__(cls,name,bases,namespace_):
         tmp = {}
@@ -1913,23 +2481,90 @@ class namespace(ProtectedBuiltinsDict):
         self = ProtectedBuiltinsDict({**tmp,**namespace_},name = name,protected_names = namespace_.get("protected_names",()))
         self["__namespace__"] = self
         return self
-def BHA_lazy_sieve():
-    from .int_array import IntHybridArray
-    flags = BoolHybridArr([False, False, True])
-    primes = IntHybridArray([2])
-    yield 2
-    n = 3
-    while True:
-        if n >= len(flags):
-            old_len = len(flags)
-            new_len = n + 1
-            extend_cnt = new_len - old_len
-            flags.extend(TruesArray(extend_cnt))
-            for p in primes:
-                start = ((old_len + p - 1) // p) * p
-                for multiple in range(start, new_len, p):
-                    flags[multiple] = False
-        if flags[n]:
-            primes.append(n)
-            yield n
-        n += 1
+class BHA_lazy_sieve(metaclass=ResurrectMeta):
+    __module__ = 'bool_hybrid_array'
+    def __init__(self):
+        from .int_array import IntHybridArray
+        self.primes = IntHybridArray([2])
+        self._limit = 3
+        self._n = 3
+        self._last = 2
+        self._started = False
+        self._pos = -1
+    def _grow(self):
+        old_len = self._limit
+        new_len = old_len + max(256, old_len >> 2)
+        blen = new_len - old_len
+        block = TruesArray(blen)
+        lim = math.isqrt(new_len - 1)
+        plen = len(self.primes)
+        for j in range(plen):
+            p = self.primes[j]
+            if p > lim:
+                break
+            start = ((old_len + p - 1) // p) * p
+            for m in range(start, new_len, p):
+                block[m - old_len] = False
+        for i in range(blen):
+            if block[i]:
+                q = old_len + i
+                qq = q * q
+                if qq >= new_len:
+                    break
+                for m in range(qq, new_len, q):
+                    block[m - old_len] = False
+        self._limit = new_len
+        for i in range(blen):
+            if block[i]:
+                self.primes.append(old_len + i)
+    def __iter__(self):
+        return self
+    def __next__(self):
+        if not self._started:
+            self._started = True
+            self._pos = 0
+            return self._last
+        while self._pos + 1 >= len(self.primes):
+            self._grow()
+        self._pos += 1
+        n = self.primes[self._pos]
+        self._last = n
+        self._n = n + 1
+        return n
+    def upto(self, N):
+        for p in self:
+            if p > N:
+                self.primes.pop()
+                self._n = p
+                break
+        while self.primes and self.primes[-1] > N:
+            self.primes.pop()
+        self._pos = len(self.primes) - 1
+        self._limit = self.primes[-1] + 1 if self.primes else 2
+        return self.primes
+    def take(self, k):
+        start = self._pos + 1
+        for _ in range(k):
+            next(self)
+        return self.primes[start:self._pos + 1]
+    def count_le(self, N):
+        while self._limit <= N:
+            self._grow()
+        return bisect.bisect_right(self.primes, N)
+    def reset(self):
+        self.__init__()
+        return self
+    @property
+    def current(self):
+        return self._last
+    @property
+    def discovered(self):
+        return len(self.primes)
+    def __len__(self):
+        return len(self.primes)
+    def __repr__(self):
+        return f'BHA_lazy_sieve(current={self._last}, discovered={len(self.primes)})'
+    def __getstate__(self):
+        return (self.primes, self._limit, self._n, self._last, self._started, self._pos)
+    def __setstate__(self, state):
+        self.primes, self._limit, self._n, self._last, self._started, self._pos = state

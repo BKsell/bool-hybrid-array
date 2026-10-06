@@ -5,6 +5,7 @@ import traceback
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 try:
+    
     import numpy as np
     include_dirs = [np.get_include()]
 
@@ -56,7 +57,6 @@ try:
     from Cython.Build import cythonize
     ext_modules = cythonize(
         exts,
-        annotate=False
     )
 
 except BaseException as e:
@@ -66,7 +66,7 @@ except BaseException as e:
 
 finally:
     def get_long_description():
-        readme_path = os.path.join(os.path.dirname(__file__), 'README.md')
+        readme_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'README.md')
         if os.path.exists(readme_path):
             with open(readme_path, encoding='utf-8') as f:
                 return f.read()
@@ -79,15 +79,13 @@ finally:
 
     setup(
         license="Apache-2.0 OR MulanPSL-2.0",
-        license_files=["LICENSE", "NOTICE", "LICENSE‑MulanPSL2"],
+        license_files=["LICENSE", "NOTICE", "LICENSE-MulanPSL2"],
         name="bool-hybrid-array",
-        version="9.13.3",
+        version="9.13.9",
         author="蔡靖杰",
         extras_require={
-            "int_array": [],
             "numba_opt": ["numba>=0.55.0"],
-            "cython_opt": ["cython>=3.2.4"],
-            "cycy opt": ["cycy-runtime>=0.2.5"]
+            "cycy_opt": ["cycy-runtime>=0.2.5"]
         },
         author_email="1289270215@qq.com",
         description="一个高效的布尔数组（密集+稀疏混合存储，节省内存）",
@@ -116,10 +114,11 @@ finally:
         ],
         keywords="boolean array, compact storage",
         package_data={
-            "": ["README.md", "LICENSE", "NOTICE", "LICENSE‑MulanPSL2" , 'temp.py', 'temp.cmd', 'BHA_Opener.7z'],
-            "bool_hybrid_array": ["*.py", "*.pyd", "*.c", "*"],
-            "bool_hybrid_array/int_array": ["*.py", "*.pyd", "*.c", "*"],
-            "bool_hybrid_array/float_array": ["*.py", "*.pyd", "*.c", "*"]
+            "": ["README.md", "LICENSE", "NOTICE", "LICENSE-MulanPSL2" , 'BHA_Opener.7z',"setup.py","pyproject.toml"],
+            "bool_hybrid_array": ["*.py"],
+            "bool_hybrid_array/int_array": ["*.py"],
+            "bool_hybrid_array/float_array": ["*.py"],
+            "bool_hybrid_array/struct_array": ["*.py"],
         },
         include_package_data=True,
         url="https://github.com/BKsell/bool-hybrid-array",

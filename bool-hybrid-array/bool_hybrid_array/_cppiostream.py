@@ -144,14 +144,14 @@ class istream:
         self.failbit = False
         self.badbit = False
         self._whitespace = {ord('\n'), ord('\t'), ord(' '), 0, ord("\r")}
-        self.eof = -1
+        self._eof_char = -1
         self.libc = None
         self._get_char = None
 
         if sys.platform == "win32":
             msvcrt = __import__("msvcrt") # noqa: cython-no-cimport
             self._get_char = lambda: ord(msvcrt.getche())
-            self.eof = 26
+            self._eof_char = 26
         else:
             libc_path = "libc.so.6" if sys.platform == "linux" else "libSystem.B.dylib"
             try:
@@ -212,7 +212,7 @@ class istream:
         cnt = 0
         while cnt < count and self.good():
             c = self._buf.pop(0) if self._buf else self._get_char()
-            if c == self.eof:
+            if c == self._eof_char:
                 self.setstate(ios_base_eofbit)
                 break
             if c == delim and delim != -1:
@@ -224,7 +224,7 @@ class istream:
             char = self._buf.pop(0) if self._buf else self._get_char()
             if char in self._whitespace:
                 continue
-            if char == self.eof:
+            if char == self._eof_char:
                 self.setstate(ios_base_eofbit)
                 return 0
             return char
@@ -233,8 +233,8 @@ class istream:
         chars = []
         while True:
             char = self._buf.pop(0) if self._buf else self._get_char()
-            if char in self._whitespace or char == self.eof:
-                if char == self.eof:
+            if char in self._whitespace or char == self._eof_char:
+                if char == self._eof_char:
                     self.setstate(ios_base_eofbit)
                 break
             if char == 8:
@@ -256,8 +256,8 @@ class istream:
         chars = []
         while True:
             char = self._buf.pop(0) if self._buf else self._get_char()
-            if char in self._whitespace or char == self.eof:
-                if char == self.eof:
+            if char in self._whitespace or char == self._eof_char:
+                if char == self._eof_char:
                     self.setstate(ios_base_eofbit)
                 break
             if char == 8:
@@ -279,8 +279,8 @@ class istream:
         chars = []
         while True:
             char = self._buf.pop(0) if self._buf else self._get_char()
-            if char in self._whitespace or char == self.eof:
-                if char == self.eof:
+            if char in self._whitespace or char == self._eof_char:
+                if char == self._eof_char:
                     self.setstate(ios_base_eofbit)
                 break
             if char == 8:
@@ -313,8 +313,8 @@ class istream:
                 if chars:
                     chars.pop()
                 continue
-            if char in self._whitespace or char == self.eof:
-                if char == self.eof:
+            if char in self._whitespace or char == self._eof_char:
+                if char == self._eof_char:
                     self.setstate(ios_base_eofbit)
                 break
             chars.append(chr(char))
@@ -325,8 +325,8 @@ class istream:
         chars = []
         while True:
             char = self._buf.pop(0) if self._buf else self._get_char()
-            if char in self._whitespace or char == self.eof:
-                if char == self.eof:
+            if char in self._whitespace or char == self._eof_char:
+                if char == self._eof_char:
                     self.setstate(ios_base_eofbit)
                 break
             if char == 8:
@@ -349,13 +349,13 @@ class istream:
         d_ord = ord(delim)
         for _ in range(max_len - 1):
             c = self._buf.pop(0) if self._buf else self._get_char()
-            if c == self.eof:
+            if c == self._eof_char:
                 self.setstate(ios_base_eofbit)
                 break
             if c == d_ord:
                 break
-            buf.append(chr(c))
-        return ''.join(buf)
+            buf.append(c)
+        return bytes(buf).decode('utf-8', errors='replace')
 
     def __rshift__(self, target):
         if isinstance(target, Manipulator):
@@ -423,17 +423,7 @@ class istream:
                         v = np.array(self._parse_int(), dtype=target.dtype)
                     flat[...] = v[()]
         elif hasattr(target, '__cin__'):
-            target.__cin__()
-        elif isinstance(target, int):
-            target = int(self._parse_int())
-        elif isinstance(target, float):
-            target = float(self._parse_float())
-        elif isinstance(target, complex):
-            target = complex(self._parse_complex())
-        elif isinstance(target, str):
-            target = self._parse_char_array()
-        elif isinstance(target, bool):
-            target = bool(int(self._parse_int()))
+            target.__cin__(self)
         else:
             raise TypeError(f"Unsupported input target type: {type(target)}")
         return self
@@ -497,7 +487,7 @@ class ostream:
                 base = 8
                 if flags & ios_showbase:
                     prefix = "0"
-            num_str = str(int(val), base)
+            num_str = format(int(val), {10: "d", 16: "x", 8: "o"}[base])
             if flags & ios_uppercase:
                 num_str = num_str.upper()
             s = prefix + num_str
@@ -564,6 +554,7 @@ class filebuf:
                 ctypes.windll.kernel32.CloseHandle(self._win_mmap_handle)
                 self._win_mmap_handle = None
             if self._mmap_obj is not None:
+                self._mmap_obj.flush()
                 self._mmap_obj.close()
                 self._mmap_obj = None
         else:
@@ -580,7 +571,10 @@ class filebuf:
         self._write_mode = bool(mode_mask & ios_out)
 
         if mode_mask & ios_in and mode_mask & ios_out:
-            py_mode = "r+b"
+            if os.path.exists(path):
+                py_mode = "r+b"
+            else:
+                py_mode = "w+b"
         elif mode_mask & ios_out:
             if mode_mask & ios_trunc:
                 py_mode = "w+b"
@@ -606,6 +600,11 @@ class filebuf:
             fd = self._file.fileno()
             access = mmap.ACCESS_WRITE if self._write_mode else mmap.ACCESS_READ
 
+            if self._file_size == 0 and not self._write_mode:
+                self._mmap_obj = None
+                self._win_mmap_handle = None
+                return True
+
             if sys.platform == "win32":
                 import msvcrt
                 self._win_file_handle = msvcrt.get_osfhandle(fd)
@@ -628,11 +627,13 @@ class filebuf:
             return False
 
     def is_open(self) -> bool:
-        return self._file is not None and not self._file.closed and self._mmap_obj is not None
+        return self._file is not None and not self._file.closed
 
     def close(self) -> bool:
         self._unmap()
         if self._file is not None:
+            if self._write_mode:
+                self._file.truncate(self._file_size)
             self._file.close()
             self._file = None
         self._win_file_handle = None
@@ -642,14 +643,14 @@ class filebuf:
         return True
 
     def get_char(self):
-        if not self.is_open() or self._pos >= self._file_size:
+        if not self.is_open() or self._mmap_obj is None or self._pos >= self._file_size:
             return -1
         c = self._mmap_obj[self._pos]
         self._pos += 1
         return c
 
     def put_char(self, ch: int):
-        if not self.is_open() or not self._write_mode:
+        if not self.is_open() or not self._write_mode or self._mmap_obj is None:
             return False
         if len(self._mmap_obj) == 0:
             self._mmap_obj.resize(4096)
@@ -690,13 +691,17 @@ class filebuf:
 
     def flush(self):
         if self.is_open() and self._write_mode:
-            self._mmap_obj.flush()
-            self._file.truncate(self._file_size)
-            self._file.flush()
+            try:
+                self._mmap_obj.flush()
+                self._file.truncate(self._file_size)
+                self._file.flush()
+            except OSError:
+                pass
 
 class ifstream(istream):
     def __init__(self, path: str = "", mode = None):
         super().__init__()
+        self._eof_char = -1
         self._fb = filebuf()
         self._get_char = self._fb.get_char
         if path:
@@ -719,6 +724,19 @@ class ifstream(istream):
 
     def is_open(self):
         return self._fb.is_open()
+
+    def tellg(self):
+        return self._fb.tellg()
+
+    def tellp(self):
+        return self._fb.tellp()
+
+    def seekg(self, off, whence=0):
+        return self._fb.seekg(off, whence)
+
+    def seekp(self, off, whence=0):
+        return self._fb.seekp(off, whence)
+
     def __del__(self):
         self.close()
 
@@ -756,13 +774,26 @@ class ofstream(ostream):
         if isinstance(data, Manipulator):
             data.apply(self)
             return self
-        text = self._format_num(data)
+        text = self._format_num(data).encode('utf-8')
         for ch in text:
-            self._fb.put_char(ord(ch))
+            self._fb.put_char(ch)
         return self
 
     def flush(self):
         self._fb.flush()
+
+    def tellg(self):
+        return self._fb.tellg()
+
+    def tellp(self):
+        return self._fb.tellp()
+
+    def seekg(self, off, whence=0):
+        return self._fb.seekg(off, whence)
+
+    def seekp(self, off, whence=0):
+        return self._fb.seekp(off, whence)
+
     def __del__(self):
         self.close()
 
@@ -775,6 +806,7 @@ class fstream(istream, ostream):
     def __init__(self, path: str = "", mode = None):
         istream.__init__(self)
         ostream.__init__(self)
+        self._eof_char = -1
         self._fb = filebuf()
         self._get_char = self._fb.get_char
         if path:
@@ -803,13 +835,26 @@ class fstream(istream, ostream):
         if isinstance(data, Manipulator):
             data.apply(self)
             return self
-        text = self._format_num(data)
+        text = self._format_num(data).encode('utf-8')
         for ch in text:
-            self._fb.put_char(ord(ch))
+            self._fb.put_char(ch)
         return self
 
     def flush(self):
         self._fb.flush()
+
+    def tellg(self):
+        return self._fb.tellg()
+
+    def tellp(self):
+        return self._fb.tellp()
+
+    def seekg(self, off, whence=0):
+        return self._fb.seekg(off, whence)
+
+    def seekp(self, off, whence=0):
+        return self._fb.seekp(off, whence)
+
     def __del__(self):
         self.close()
 
