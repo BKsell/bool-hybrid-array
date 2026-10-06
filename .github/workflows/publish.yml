@@ -20,6 +20,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Extract version from tag
         id: version
         shell: bash
@@ -61,6 +66,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Extract version from tag
         id: version
         shell: bash
@@ -82,11 +92,6 @@ jobs:
           s = s[:i + len(marker)] + ver + s[j:]
           open(p, "w", encoding="utf-8", newline="").write(s)
           PY
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
 
       - name: Build sdist
         working-directory: bool-hybrid-array
