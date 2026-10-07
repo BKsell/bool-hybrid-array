@@ -9,14 +9,13 @@ permissions:
   contents: read
 
 jobs:
-  build-wheels:
-    name: Build wheels (${{ matrix.os }} ${{ matrix.pyver }})
+  build-cp38:
+    name: Build cp38 (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        pyver: [cp38, cp39, cp310, cp311, cp312, cp313]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,14 +47,68 @@ jobs:
           open(p, "w", encoding="utf-8", newline="").write(s)
           PY
 
-      - name: Build wheel
+      - name: Build cp38 wheel (cibuildwheel 2.x)
         uses: pypa/cibuildwheel@v2.23.4
         with:
           package-dir: bool-hybrid-array
           output-dir: wheelhouse
         env:
+          CIBW_BUILD: "cp38-*"
+          CIBW_MANYLINUX_X86_64_IMAGE: "quay.io/pypa/manylinux2014_x86_64:2025.04.19-1"
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-cp38-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  build-wheels:
+    name: Build wheels (${{ matrix.os }} ${{ matrix.pyver }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        pyver: [cp39, cp310, cp311, cp312, cp313, cp314]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Pin tag version into setup.py
+        shell: bash
+        run: |
+          python - "${{ steps.version.outputs.version }}" <<'PY'
+          import sys
+          ver = sys.argv[1]
+          p = "bool-hybrid-array/setup.py"
+          s = open(p, encoding="utf-8").read()
+          marker = 'version="'
+          i = s.index(marker)
+          j = s.index('"', i + len(marker))
+          s = s[:i + len(marker)] + ver + s[j:]
+          open(p, "w", encoding="utf-8", newline="").write(s)
+          PY
+
+      - name: Build wheel (cibuildwheel 4.x)
+        uses: pypa/cibuildwheel@v4.3.0
+        with:
+          package-dir: bool-hybrid-array
+          output-dir: wheelhouse
+        env:
           CIBW_BUILD: "${{ matrix.pyver }}-*"
-          CIBW_MANYLINUX_X86_64_IMAGE: ${{ (matrix.pyver == 'cp312' || matrix.pyver == 'cp313') && 'quay.io/pypa/manylinux_2_34_x86_64' || matrix.pyver == 'cp38' && 'quay.io/pypa/manylinux2014_x86_64:2025.04.19-1' || 'quay.io/pypa/manylinux_2_28_x86_64' }}
+          CIBW_MANYLINUX_X86_64_IMAGE: ${{ (matrix.pyver == 'cp312' || matrix.pyver == 'cp313') && 'quay.io/pypa/manylinux_2_34_x86_64' || 'quay.io/pypa/manylinux_2_28_x86_64' }}
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
@@ -111,7 +164,7 @@ jobs:
 
   publish:
     name: Publish to PyPI
-    needs: [build-wheels, build-sdist]
+    needs: [build-cp38, build-wheels, build-sdist]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
