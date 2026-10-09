@@ -55,6 +55,7 @@ jobs:
         env:
           CIBW_BUILD: "cp38-*"
           CIBW_MANYLINUX_X86_64_IMAGE: "quay.io/pypa/manylinux2014_x86_64:2025.04.19-1"
+          CIBW_BEFORE_BUILD: "python -m pip install \"numpy>=1.19,<2.5\""
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
@@ -109,6 +110,7 @@ jobs:
         env:
           CIBW_BUILD: "${{ matrix.pyver }}-*"
           CIBW_MANYLINUX_X86_64_IMAGE: ${{ (matrix.pyver == 'cp312' || matrix.pyver == 'cp313') && 'quay.io/pypa/manylinux_2_34_x86_64' || 'quay.io/pypa/manylinux_2_28_x86_64' }}
+          CIBW_BEFORE_BUILD: "python -m pip install \"numpy>=1.19,<2.5\""
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
