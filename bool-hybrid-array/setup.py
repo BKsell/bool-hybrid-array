@@ -33,8 +33,6 @@ try:
         ]
         link_args = ["/OPT:REF", "/OPT:ICF"]
     else:
-        import platform
-        arch = platform.machine().lower()
         c_args = []
         link_args = []
 
@@ -76,7 +74,7 @@ finally:
         license="Apache-2.0 OR MulanPSL-2.0",
         license_files=["LICENSE", "NOTICE", "LICENSE-MulanPSL2"],
         name="bool-hybrid-array",
-        version="9.13.10",
+        version="9.13.11",
         author="蔡靖杰",
         extras_require={
             "numba_opt": ["numba>=0.55.0"],

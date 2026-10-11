@@ -376,14 +376,16 @@ class IntHybridArray(MutableSequence, metaclass=ResurrectMeta):
         self._bits._del_bits(start, start + self.bit_length)
 
     def __contains__(self, value):
-        value = int(value)
+        if not isinstance(value, int):
+            return False
         for i in range(len(self)):
             if self[i] == value:
                 return True
         return False
 
     def index(self, value, start=0, stop=None):
-        value = int(value)
+        if not isinstance(value, int):
+            raise ValueError(f"{value} 不在 IntHybridArray 中")
         n = len(self)
         if stop is None:
             stop = n
@@ -395,8 +397,17 @@ class IntHybridArray(MutableSequence, metaclass=ResurrectMeta):
         raise ValueError(f"{value} 不在 IntHybridArray 中")
 
     def count(self, value):
-        value = int(value)
+        if not isinstance(value, int):
+            return 0
         return sum(1 for i in range(len(self)) if self[i] == value)
+
+    def find(self, value):
+        if not isinstance(value, int):
+            return -1
+        try:
+            return self.index(value)
+        except ValueError:
+            return -1
 
     def extend(self, iterable):
         for v in iterable:

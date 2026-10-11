@@ -1002,8 +1002,14 @@ class BHA_Vec2(BHA_Struct):
     def normalized(self):
         n = self.length()
         return BHA_Vec2(0.0, 0.0) if n == 0 else BHA_Vec2(float(self.x) / n, float(self.y) / n)
-    def __add__(self, o): return BHA_Vec2(float(self.x) + float(o.x), float(self.y) + float(o.y))
-    def __sub__(self, o): return BHA_Vec2(float(self.x) - float(o.x), float(self.y) - float(o.y))
+    def __add__(self, o):
+        if set(o.__BHAStructAttrs__) != {"x", "y"}:
+            return NotImplemented
+        return BHA_Vec2(float(self.x) + float(o.x), float(self.y) + float(o.y))
+    def __sub__(self, o):
+        if set(o.__BHAStructAttrs__) != {"x", "y"}:
+            return NotImplemented
+        return BHA_Vec2(float(self.x) - float(o.x), float(self.y) - float(o.y))
     def __mul__(self, s): return BHA_Vec2(float(self.x) * float(s), float(self.y) * float(s))
     def __rmul__(self, s): return self * s
     def __neg__(self): return BHA_Vec2(-float(self.x), -float(self.y))
@@ -1022,8 +1028,14 @@ class BHA_Vec3(BHA_Struct):
         return BHA_Vec3(0.0, 0.0, 0.0) if n == 0 else BHA_Vec3(float(self.x) / n, float(self.y) / n, float(self.z) / n)
     def normalize(self):
         return self.normalized()
-    def __add__(self, o): return BHA_Vec3(float(self.x) + float(o.x), float(self.y) + float(o.y), float(self.z) + float(o.z))
-    def __sub__(self, o): return BHA_Vec3(float(self.x) - float(o.x), float(self.y) - float(o.y), float(self.z) - float(o.z))
+    def __add__(self, o):
+        if set(o.__BHAStructAttrs__) != {"x", "y", "z"}:
+            return NotImplemented
+        return BHA_Vec3(float(self.x) + float(o.x), float(self.y) + float(o.y), float(self.z) + float(o.z))
+    def __sub__(self, o):
+        if set(o.__BHAStructAttrs__) != {"x", "y", "z"}:
+            return NotImplemented
+        return BHA_Vec3(float(self.x) - float(o.x), float(self.y) - float(o.y), float(self.z) - float(o.z))
     def __mul__(self, s): return BHA_Vec3(float(self.x) * float(s), float(self.y) * float(s), float(self.z) * float(s))
     def __rmul__(self, s): return self * s
     def __neg__(self): return BHA_Vec3(-float(self.x), -float(self.y), -float(self.z))
@@ -1039,8 +1051,14 @@ class BHA_Vec4(BHA_Struct):
     def normalized(self):
         n = self.length()
         return BHA_Vec4(0.0, 0.0, 0.0, 0.0) if n == 0 else BHA_Vec4(float(self.x) / n, float(self.y) / n, float(self.z) / n, float(self.w) / n)
-    def __add__(self, o): return BHA_Vec4(float(self.x) + float(o.x), float(self.y) + float(o.y), float(self.z) + float(o.z), float(self.w) + float(o.w))
-    def __sub__(self, o): return BHA_Vec4(float(self.x) - float(o.x), float(self.y) - float(o.y), float(self.z) - float(o.z), float(self.w) - float(o.w))
+    def __add__(self, o):
+        if set(o.__BHAStructAttrs__) != {"x", "y", "z", "w"}:
+            return NotImplemented
+        return BHA_Vec4(float(self.x) + float(o.x), float(self.y) + float(o.y), float(self.z) + float(o.z), float(self.w) + float(o.w))
+    def __sub__(self, o):
+        if set(o.__BHAStructAttrs__) != {"x", "y", "z", "w"}:
+            return NotImplemented
+        return BHA_Vec4(float(self.x) - float(o.x), float(self.y) - float(o.y), float(self.z) - float(o.z), float(self.w) - float(o.w))
     def __mul__(self, s): return BHA_Vec4(float(self.x) * float(s), float(self.y) * float(s), float(self.z) * float(s), float(self.w) * float(s))
     def __rmul__(self, s): return self * s
     def __neg__(self): return BHA_Vec4(-float(self.x), -float(self.y), -float(self.z), -float(self.w))
@@ -1048,14 +1066,26 @@ class BHA_Vec4(BHA_Struct):
 
 class BHA_Point(BHA_Struct):
     __BHAStructAttrs__ = {"x": int, "y": int}
-    def __add__(self, o): return BHA_Point(int(self.x) + int(o.x), int(self.y) + int(o.y))
-    def __sub__(self, o): return BHA_Point(int(self.x) - int(o.x), int(self.y) - int(o.y))
+    def __add__(self, o):
+        if set(o.__BHAStructAttrs__) != {"x", "y"}:
+            return NotImplemented
+        return BHA_Point(int(self.x) + int(o.x), int(self.y) + int(o.y))
+    def __sub__(self, o):
+        if set(o.__BHAStructAttrs__) != {"x", "y"}:
+            return NotImplemented
+        return BHA_Point(int(self.x) - int(o.x), int(self.y) - int(o.y))
 
 
 class BHA_Point3D(BHA_Struct):
     __BHAStructAttrs__ = {"x": int, "y": int, "z": int}
-    def __add__(self, o): return BHA_Point3D(int(self.x) + int(o.x), int(self.y) + int(o.y), int(self.z) + int(o.z))
-    def __sub__(self, o): return BHA_Point3D(int(self.x) - int(o.x), int(self.y) - int(o.y), int(self.z) - int(o.z))
+    def __add__(self, o):
+        if set(o.__BHAStructAttrs__) != {"x", "y", "z"}:
+            return NotImplemented
+        return BHA_Point3D(int(self.x) + int(o.x), int(self.y) + int(o.y), int(self.z) + int(o.z))
+    def __sub__(self, o):
+        if set(o.__BHAStructAttrs__) != {"x", "y", "z"}:
+            return NotImplemented
+        return BHA_Point3D(int(self.x) - int(o.x), int(self.y) - int(o.y), int(self.z) - int(o.z))
 
 
 class BHA_Quaternion(BHA_Struct):
@@ -1068,14 +1098,18 @@ class BHA_Quaternion(BHA_Struct):
     def conjugate(self): return BHA_Quaternion(float(self.x), float(self.y), float(self.z), -float(self.w))
     def __mul__(self, o):
         if isinstance(o, BHA_Struct):
+            if set(o.__BHAStructAttrs__) != {"x", "y", "z", "w"}:
+                return NotImplemented
             a1, b1, c1, d1 = float(self.x), float(self.y), float(self.z), float(self.w)
             a2, b2, c2, d2 = float(o.x), float(o.y), float(o.z), float(o.w)
             return BHA_Quaternion(d1 * a2 + a1 * d2 + b1 * c2 - c1 * b2,
                                   d1 * b2 - a1 * c2 + b1 * d2 + c1 * a2,
                                   d1 * c2 + a1 * b2 - b1 * a2 + c1 * d2,
                                   d1 * d2 - a1 * a2 - b1 * b2 - c1 * c2)
-        return BHA_Quaternion(float(self.x) * float(o), float(self.y) * float(o),
-                              float(self.z) * float(o), float(self.w) * float(o))
+        if isinstance(o, (int, float)):
+            return BHA_Quaternion(float(self.x) * float(o), float(self.y) * float(o),
+                                  float(self.z) * float(o), float(self.w) * float(o))
+        return NotImplemented
     __rmul__ = __mul__
     def rotate(self, v):
         x, y, z = (float(v.x), float(v.y), float(v.z)) if isinstance(v, BHA_Struct) else (float(v[0]), float(v[1]), float(v[2]))
@@ -1086,6 +1120,18 @@ class BHA_Quaternion(BHA_Struct):
         return BHA_Vec3(x + qw * tx + (qy * tz - qz * ty),
                         y + qw * ty + (qz * tx - qx * tz),
                         z + qw * tz + (qx * ty - qy * tx))
+    def __add__(self, o):
+        if isinstance(o, BHA_Struct):
+            if set(o.__BHAStructAttrs__) != {"x", "y", "z", "w"}:
+                return NotImplemented
+            return BHA_Quaternion(float(self.x) + float(o.x), float(self.y) + float(o.y),
+                                  float(self.z) + float(o.z), float(self.w) + float(o.w))
+        return NotImplemented
+    def norm(self):
+        return (float(self.x) ** 2 + float(self.y) ** 2 + float(self.z) ** 2 + float(self.w) ** 2) ** 0.5
+    def normalize(self):
+        n = self.norm()
+        return BHA_Quaternion(0.0, 0.0, 0.0, 0.0) if n == 0 else BHA_Quaternion(float(self.x) / n, float(self.y) / n, float(self.z) / n, float(self.w) / n)
 
 
 class BHA_Range(BHA_Struct):
@@ -1225,7 +1271,10 @@ class BHA_BBox(BHA_Struct):
 class BHA_UV(BHA_Struct):
     __BHAStructAttrs__ = {"u": float, "v": float}
     def flip_v(self): return BHA_UV(float(self.u), 1.0 - float(self.v))
-    def __add__(self, o): return BHA_UV(float(self.u) + float(o.u), float(self.v) + float(o.v))
+    def __add__(self, o):
+        if set(o.__BHAStructAttrs__) != {"u", "v"}:
+            return NotImplemented
+        return BHA_UV(float(self.u) + float(o.u), float(self.v) + float(o.v))
 
 
 class BHA_ColorF(BHA_Struct):
@@ -1268,6 +1317,24 @@ class BHA_ColorF(BHA_Struct):
                           float(self.g) + (float(o.g) - float(self.g)) * t,
                           float(self.b) + (float(o.b) - float(self.b)) * t,
                           float(self.a) + (float(o.a) - float(self.a)) * t)
+    def __add__(self, o):
+        if isinstance(o, BHA_Struct):
+            if set(o.__BHAStructAttrs__) != {"r", "g", "b", "a"}:
+                return NotImplemented
+            return BHA_ColorF(float(self.r) + float(o.r), float(self.g) + float(o.g),
+                              float(self.b) + float(o.b), float(self.a) + float(o.a))
+        return NotImplemented
+    def __mul__(self, s):
+        if isinstance(s, (int, float)):
+            return BHA_ColorF(float(self.r) * float(s), float(self.g) * float(s),
+                              float(self.b) * float(s), float(self.a) * float(s))
+        if isinstance(s, BHA_Struct):
+            if set(s.__BHAStructAttrs__) != {"r", "g", "b", "a"}:
+                return NotImplemented
+            return BHA_ColorF(float(self.r) * float(s.r), float(self.g) * float(s.g),
+                              float(self.b) * float(s.b), float(self.a) * float(s.a))
+        return NotImplemented
+    __rmul__ = __mul__
 
 
 class BHA_Size(BHA_Struct):
@@ -1354,6 +1421,14 @@ class BHA_Mat2(BHA_Struct):
             m11 = 0.0 if m11 is None else m11
         self.m00, self.m01, self.m10, self.m11 = m00, m01, m10, m11
     def determinant(self): return float(self.m00) * float(self.m11) - float(self.m01) * float(self.m10)
+    def det(self):
+        return self.determinant()
+    def inv(self):
+        d = self.determinant()
+        if d == 0:
+            raise ValueError("矩阵不可逆（行列式为 0）")
+        return BHA_Mat2(float(self.m11) / d, -float(self.m01) / d,
+                        -float(self.m10) / d, float(self.m00) / d)
     def trace(self): return float(self.m00) + float(self.m11)
     def transpose(self):
         return BHA_Mat2(float(self.m00), float(self.m10), float(self.m01), float(self.m11))
@@ -1372,6 +1447,11 @@ class BHA_Mat2(BHA_Struct):
         return NotImplemented
     def __rmul__(self, o):
         return self * o if isinstance(o, (int, float)) else NotImplemented
+    def __add__(self, o):
+        if isinstance(o, BHA_Mat2):
+            return BHA_Mat2(float(self.m00) + float(o.m00), float(self.m01) + float(o.m01),
+                            float(self.m10) + float(o.m10), float(self.m11) + float(o.m11))
+        return NotImplemented
 
 
 class BHA_Mat3(BHA_Struct):
@@ -1434,6 +1514,11 @@ class BHA_Mat3(BHA_Struct):
         return NotImplemented
     def __rmul__(self, o):
         return self * o if isinstance(o, (int, float)) else NotImplemented
+    def __add__(self, o):
+        if isinstance(o, BHA_Mat3):
+            return BHA_Mat3(*(float(getattr(self, f"m{i}{j}")) + float(getattr(o, f"m{i}{j}"))
+                              for i in range(3) for j in range(3)))
+        return NotImplemented
 
 
 class BHA_Transform(BHA_Struct):

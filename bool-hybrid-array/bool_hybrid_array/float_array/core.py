@@ -9,13 +9,15 @@ from ..twg_sort import twg_sort
 
 class BHA_Float(float):
     def __new__(cls, data=0, prec=16):
-        self = super().__new__(cls)
         if isinstance(data, tuple):
             a, b, length = data[0], data[1], data[2]
             sign = bool(data[3]) if len(data) > 3 else (a < 0)
+            fval = float(f"{'-' if sign else ''}{abs(a)}.{str(b).zfill(length)}")
+            self = super().__new__(cls, fval)
             self.a, self.b, self.length, self.sign = abs(a), b, length, sign
             return self
         if isinstance(data, BHA_Float):
+            self = super().__new__(cls, float(str(data)))
             self.a = data.a
             self.b = data.b
             self.length = data.length
@@ -36,7 +38,10 @@ class BHA_Float(float):
         else:
             a, b = data, ''
         b = b.rstrip('0')
-        self.length = len(b) if b else 1
+        length = len(b) if b else 1
+        fval = float(f"{'-' if sign else ''}{a}.{b}") if data else 0.0
+        self = super().__new__(cls, fval)
+        self.length = length
         self.a, self.b = int(a) if a else 0, int(b) if b else 0
         self.sign = sign
         return self
@@ -461,25 +466,36 @@ class FloatHybridArray(MutableSequence):
             self[i], self[j] = self[j], self[i]
 
     def index(self, value, start=0, stop=None):
-        v = BHA_Float(value)
+        if not isinstance(value, float):
+            raise ValueError(f"{value} 不在 FloatHybridArray 中")
         n = len(self)
         if stop is None:
             stop = n
         start = max(0, start if start >= 0 else start + n)
         stop = min(n, stop if stop >= 0 else stop + n)
         for i in range(start, stop):
-            if self[i] == v:
+            if self[i] == value:
                 return i
         raise ValueError(f"{value} 不在 FloatHybridArray 中")
 
     def count(self, value):
-        v = BHA_Float(value)
-        return sum(1 for i in range(len(self)) if self[i] == v)
+        if not isinstance(value, float):
+            return 0
+        return sum(1 for i in range(len(self)) if self[i] == value)
+
+    def find(self, value):
+        if not isinstance(value, float):
+            return -1
+        try:
+            return self.index(value)
+        except ValueError:
+            return -1
 
     def __contains__(self, value):
-        v = BHA_Float(value)
+        if not isinstance(value, float):
+            return False
         for i in range(len(self)):
-            if self[i] == v:
+            if self[i] == value:
                 return True
         return False
 

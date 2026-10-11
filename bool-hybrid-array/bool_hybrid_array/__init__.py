@@ -13,7 +13,7 @@ try:from . import twg_sort
 except:traceback.print_exc()
 try:from . import _cppiostream
 except:traceback.print_exc()
-__version__ = "9.13.10"
+__version__ = "9.13.11"
 public_objects = {
         "BHA_lazy_sieve":core.BHA_lazy_sieve,
         "np": core.np,

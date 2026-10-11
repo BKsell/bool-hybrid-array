@@ -1110,6 +1110,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
 
     def find(self,value):
         from .int_array import IntHybridArray
+        if not (value == True or value == False):
+            return IntHybridArray()
         return IntHybridArray(i for i in range(len(self)) if self[i]==value)
     def extend(self, iterable:Iterable) -> None:
         if isinstance(iterable, (Iterator, Generator, map)):
@@ -1177,6 +1179,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def index(self, value, start=0, stop=None) -> int:
         if self.size == 0:
             raise ValueError('无法在空的 BoolHybridArray 中查找元素！')
+        if not (value == True or value == False):
+            raise ValueError(f"{value} not in BoolHybridArray")
         value = bool(value)
         n = self.size
         if stop is None:
@@ -1190,6 +1194,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def rindex(self, value) -> int:
         if self.size == 0:
             raise ValueError('无法在空的 BoolHybridArray 中查找元素！')
+        if not (value == True or value == False):
+            raise ValueError(f"{value} not in BoolHybridArray")
         value = bool(value)
         x = 'not find'
         for i in range(self.size):
@@ -1204,6 +1210,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         raise ValueError(f"{value} not in BoolHybridArray")
 
     def count(self, value) -> int:
+        if not (value == True or value == False): return 0
         value = bool(value)
         if not self.size: return 0
         scan_n = min(self.split_index + 1, self.size)
@@ -1537,7 +1544,7 @@ class BHA_List(list,metaclass=ResurrectMeta):
         return art
     def save(self,path,*a,**k):return Create_BHA(path,self,*a,**k)
     @classmethod
-    def load(path,*a,**k):return Ask_BHA(path,*a,**k)
+    def load(cls, path,*a,**k):return Ask_BHA(path,*a,**k)
 class BHA_Iterator(Iterator,metaclass=ResurrectMeta):
     __module__ = 'bool_hybrid_array'
     def __init__(self,data):
@@ -1691,6 +1698,12 @@ class BHA_string(metaclass = ResurrectMeta):
         else:
             raise TypeError
         return self
+    def __mul__(self, n):
+        n = operator.index(n)
+        if n <= 0:
+            return BHA_string(b"")
+        return BHA_string(self._buf * n)
+    __rmul__ = __mul__
     def __cin__(self,stream = None) -> None:
         if stream == None:line = sys.stdin.readline()
         else:line = stream.getline()
@@ -1810,15 +1823,14 @@ def _real_generator(in_q,out_q):
     sys_info = (sys.version + platform.machine()
     + platform.processor() + str(os.cpu_count()))
     mix_seed = (
-    str(raw_seed) + sys_info + dynamic_data + os.urandom(8).hex())
-    h1 = umfs(mix_seed.encode()).digest()
-    h2 = hashlib.md5(h1.hex().encode()).digest()
-    mt_seed = int.from_bytes(h2, byteorder='big')
+    str(raw_seed) + sys_info + dynamic_data + os.urandom(32).hex() + str(__file__))
+    h1 = umfs(mix_seed.encode())
+    hx = h1.hexdigest(bitn = 4096)
     __mt_state = array.array('I',[0] * 624)
-    __mt_state[0] = mt_seed & 0xFFFFFFFF
-    for i in range(1, 624):
-        __mt_state[i] = (1812433253 * (__mt_state[i-1] ^
-        (__mt_state[i-1] >> 30)) + i) & 0xFFFFFFFF
+    for i in range(128):
+        __mt_state[i] = int(hx[i << 3:(i + 1) << 3],base = 16) & ((1 << 32) - 1)
+    for i in range(128, 624):
+        __mt_state[i] = (1812433253 * (__mt_state[i - 1] ^ (__mt_state[i - 1] >> 30)) + i) & ((1 << 32) - 1)
     __mt_index = 0
     while in_q.get() == "next":
         if __mt_index >= 624:
@@ -1829,7 +1841,7 @@ def _real_generator(in_q,out_q):
                 if y & 1:
                     __mt_state[i] ^= 0x9908B0DF
                     __mt_state[i] += (
-                        int.from_bytes(os.urandom(1),'big')&0xFFFFFFFF)
+                        int.from_bytes(os.urandom(4),'big')&0xFFFFFFFF)
             __mt_index = 0
         y = __mt_state[__mt_index]
         __mt_index += 1
@@ -2342,7 +2354,7 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
         return self
 def Ask_arr(arr):
     if isinstance(arr,BHA_List):
-        return '\n'.join(map(Ask_arr,arr))
+        return ' '.join(('['+Ask_arr(x)+']' if isinstance(x,BHA_List) else Ask_arr(x)) for x in arr)
     elif isinstance(arr,BoolHybridArray):
         if arr.size == 0:
             return ''
@@ -2351,6 +2363,33 @@ def Ask_arr(arr):
         return h
     else:
         return str(arr)
+def _parse_bha_text(s):
+    tokens = []
+    i, n = 0, len(s)
+    while i < n:
+        c = s[i]
+        if c.isspace():
+            i += 1
+        elif c == '[':
+            depth = 1
+            j = i + 1
+            while j < n and depth:
+                if s[j] == '[':
+                    depth += 1
+                elif s[j] == ']':
+                    depth -= 1
+                j += 1
+            tokens.append(_parse_bha_text(s[i + 1:j - 1]))
+            i = j
+        elif c == ']':
+            i += 1
+        else:
+            j = i
+            while j < n and not s[j].isspace() and s[j] not in '[]':
+                j += 1
+            tokens.append(s[i:j])
+            i = j
+    return tokens
 def temp2():
     @lru_cache
     def __temp1(x):
@@ -2378,11 +2417,15 @@ def Ask_BHA(path,mode = "BHA"):
             mm = mmap.mmap(f.fileno(), file_size, flags=mmap.MAP_PRIVATE, prot=mmap.PROT_READ)
         with mm:
             temp = mm.read().decode('utf-8').strip()
-        temp = temp.split()
-        temp = BHA_List(map(temp2,temp))
-        if len(temp) == 1:
-            return temp[0]
-        return temp
+        tokens = _parse_bha_text(temp)
+        def _build(tok):
+            if isinstance(tok, list):
+                return BHA_List(map(_build, tok))
+            return temp2(tok)
+        arr = list(map(_build, tokens))
+        if len(arr) == 1 and not isinstance(arr[0], BHA_List):
+            return arr[0]
+        return BHA_List(arr)
 
 class BHA_Queue(Collection, metaclass=ResurrectMeta):
     def __init__(self, data=(), collection = BoolHybridArr, *a, **k):

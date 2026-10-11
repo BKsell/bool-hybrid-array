@@ -618,7 +618,7 @@ class filebuf:
                     raise OSError("CreateFileMapping failed")
                 self._mmap_obj = mmap.mmap(fd, map_size, access=access)
             else:
-                map_len = self._file_size if not self._write_mode else 0
+                map_len = max(self._file_size, 4096) if self._write_mode else self._file_size
                 self._mmap_obj = mmap.mmap(fd, map_len, access=access)
             return True
         except OSError:
@@ -690,7 +690,7 @@ class filebuf:
         return self.tellg()
 
     def flush(self):
-        if self.is_open() and self._write_mode:
+        if self.is_open() and self._write_mode and self._mmap_obj is not None:
             try:
                 self._mmap_obj.flush()
                 self._file.truncate(self._file_size)
