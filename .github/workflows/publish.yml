@@ -109,7 +109,7 @@ jobs:
           output-dir: wheelhouse
         env:
           CIBW_BUILD: "${{ matrix.pyver }}-*"
-          CIBW_MANYLINUX_X86_64_IMAGE: "quay.io/pypa/manylinux_2_34_x86_64"
+          CIBW_MANYLINUX_X86_64_IMAGE: ${{ (matrix.pyver == 'cp39' || matrix.pyver == 'cp310' || matrix.pyver == 'cp311') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'quay.io/pypa/manylinux_2_34_x86_64' }}
           CIBW_BEFORE_BUILD: "python -m pip install \"numpy>=1.19.0\""
 
       - name: Upload wheel
