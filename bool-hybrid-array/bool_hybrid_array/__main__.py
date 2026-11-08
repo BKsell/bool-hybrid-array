@@ -517,3 +517,9 @@ s.discard(p1.x)
 print(len(s))  # 输出：2
 
 print([(int(p.x), int(p.y)) for p in s])  # 输出：[(2, 2), (3, 3)]（按键升序）
+
+#forest（9.13.12版本新增）
+
+from bool_hybrid_array.forest import *
+
+#以后使用任何库都不需要import了！类似pyforest，但更强大！第三方库也支持！

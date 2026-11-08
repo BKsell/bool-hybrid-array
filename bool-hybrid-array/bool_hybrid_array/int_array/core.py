@@ -349,6 +349,54 @@ class IntHybridArray(MutableSequence, metaclass=ResurrectMeta):
             self._expand_bit_length(delta, n, old_bl)
             self._set_block(key, value)
 
+    def sum(self, start=0):
+        n = len(self)
+        if self.Type is not int:
+            s = start
+            for i in range(n):
+                s += self.Type(self[i])
+            return s
+        bl = self.bit_length
+        bits = self._bits
+        split = bits.split_index
+        s = start
+        sm = bits.small
+        small_n = min(split + 1, n * bl)
+        val = int.from_bytes(sm.data.tobytes(), 'little') if small_n > 0 else 0
+        large = bits.large
+        is_sparse = bits.is_sparse
+        end = n * bl
+        pos = 0
+        lo = bisect.bisect_left(large, 0)
+        i = lo
+        m = len(large)
+        mag_mask = (int(1) << (bl - 1)) - int(1)
+        while pos < end:
+            hi = pos + bl
+            raw = 0
+            if pos < small_n:
+                sm_hi = small_n if small_n < hi else hi
+                sm_len = sm_hi - pos
+                raw = (val >> pos) & ((int(1) << sm_len) - int(1))
+                if not is_sparse and hi > sm_hi:
+                    raw |= ((int(1) << (hi - sm_hi)) - int(1)) << sm_len
+            elif not is_sparse:
+                raw = (int(1) << bl) - int(1)
+            while i < m and large[i] < hi:
+                p = large[i]
+                if p >= small_n:
+                    if is_sparse:
+                        raw |= int(1) << (p - pos)
+                    else:
+                        raw &= ~(int(1) << (p - pos))
+                i += 1
+            if raw & 1:
+                s -= (mag_mask ^ (raw >> 1)) + 1
+            else:
+                s += raw >> 1
+            pos = hi
+        return s
+
     def __iter__(self):
         return map(self.__getitem__, range(len(self)))
 
@@ -576,10 +624,7 @@ class IntHybridArray(MutableSequence, metaclass=ResurrectMeta):
         b1 = idx1 * bl
         b2 = idx2 * bl
         for i in range(bl):
-            x = bits[b1 + i]
-            y = bits[b2 + i]
-            bits[b1 + i] = y
-            bits[b2 + i] = x
+            bits.swap(b1 + i, b2 + i)
 
     def move(self, idx1, length, idx2):
         """剪切 [idx1, idx1+length) 这 length 个元素，插入到删除后数组的第 idx2 位。

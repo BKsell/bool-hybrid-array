@@ -84,20 +84,20 @@ class ResurrectMeta(abc.ABCMeta,metaclass=abc.ABCMeta):
         return hash(cls.name+cls.__module__)
     def __setattr__(cls,name,value):
         if not hasattr(cls, 'x') or name.startswith('_'):
-            super().__setattr__(name,value)
+            type.__setattr__(cls, name, value)
             return
         if hasattr(cls, 'name') and cls.name == 'BHA_Bool' and repr(value) in {'T','F'} and name in {'T','F'}:
-            super().__setattr__(name,value)
+            type.__setattr__(cls, name, value)
             return
         if hasattr(cls, 'original_dict') and name in cls.original_dict:
             raise AttributeError(f'禁止修改属性：{name}')
         else:
-            super().__setattr__(name,value)
+            type.__setattr__(cls, name, value)
     def __delattr__(cls,name):
         if name in cls.original_dict:
             raise AttributeError(f'禁止删除属性：{name}')
         else:
-            super().__delattr__(name)
+            type.__delattr__(cls, name)
     if 'UnionType' not in types.__dict__:
         def __or__(self,other):
             return Union[self,other]
@@ -596,8 +596,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
                 b1 = (d[p1] >> o1) & 1
                 b2 = (d[p2] >> o2) & 1
                 if b1 != b2:
-                    d[p1] = ((d[p1] & ~(1 << o1) & 0xFF) | (b2 << o1)) & 0xFF
-                    d[p2] = ((d[p2] & ~(1 << o2) & 0xFF) | (b1 << o2)) & 0xFF
+                    d[p1] = ((d[p1] & (0xFF ^ (1 << o1))) | (b2 << o1)) & 0xFF
+                    d[p2] = ((d[p2] & (0xFF ^ (1 << o2))) | (b1 << o2)) & 0xFF
             return
         v1 = self.accessor(idx1)
         v2 = self.accessor(idx2)
@@ -885,15 +885,78 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             other = BHA_Iterator(other)
         if len(self) != len(other):
             raise ValueError(f"与运算要求数组长度相同（{len(self)} vs {len(other)}）")
+        if isinstance(other, BoolHybridArray):
+            return BoolHybridArray._from_int(self._bits_to_int() & other._bits_to_int(), self.size, self.hash_, self.Type)
         return BoolHybridArr(map(operator.and_, self, other),hash_ = self.hash_)
+
+    def _bits_to_int(self) -> int:
+        n = self.size
+        split = self.split_index
+        small_len = min(split + 1, n)
+        v = 0
+        if small_len:
+            raw = int.from_bytes(self.small.data.tobytes(), 'little')
+            r = 0
+            for i in range(small_len):
+                r = (r << 1) | ((raw >> i) & 1)
+            v = r << (n - small_len)
+        large = self.large
+        if self.is_sparse:
+            for i in large:
+                if i >= small_len:
+                    v |= int(1) << (n - 1 - i)
+        elif n > small_len:
+            v |= (int(1) << (n - small_len)) - int(1)
+            for i in large:
+                if i >= small_len:
+                    v &= ~(int(1) << (n - 1 - i))
+        return v
+
+    @staticmethod
+    def _from_int(r, n, hash_=True, Type=None):
+        if n <= 0:
+            return BoolHybridArray(0, 0, False, Type, hash_)
+        r &= (int(1) << n) - int(1)
+        true_count = r.bit_count()
+        is_sparse = true_count <= n - true_count
+        arr = BoolHybridArray.__new__(BoolHybridArr)
+        arr.large = []
+        arr.small = BoolHybridArray._CompactBoolArray(1)
+        arr.split_index = 0
+        arr.is_sparse = is_sparse
+        arr.Type = Type if Type is not None else BHA_Bool
+        arr.hash_ = hash_
+        arr.size = n
+        arr.small[0] = bool((r >> (n - 1)) & 1)
+        x = r >> 1
+        idx = n - 2
+        lst = arr.large
+        if is_sparse:
+            while x:
+                low = x & -x
+                lst.append(idx - (low.bit_length() - 1))
+                x ^= low
+        else:
+            mask_x = (int(1) << (n - 1)) - int(1)
+            zeros = mask_x & ~x
+            while zeros:
+                low = zeros & -zeros
+                lst.append(idx - (low.bit_length() - 1))
+                zeros ^= low
+        lst.reverse()
+        if (r & 1) if is_sparse else (not (r & 1)):
+            lst.append(n - 1)
+        type_ = 'I' if n < int(1) << 32 else 'Q'
+        arr.large = array.array(type_, lst) if n < int(1) << 64 else lst
+        arr._cached_hash = id(arr)
+        if hash_:
+            hybrid_array_cache[arr] = arr._cached_hash
+        return arr
 
     def __int__(self):
         if not self.size:
             return 0
-        return reduce(lambda acc, val: operator.or_(operator.lshift(acc, 1), int(val)),self,0)
-
-    def __index__(self):
-        return int(self)
+        return self._bits_to_int()
 
     def __or__(self, other:Iterable) -> BoolHybridArray:
         if type(other) == int:
@@ -903,6 +966,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             other = BHA_Iterator(other)
         if len(self) != len(other):
             raise ValueError(f"或运算要求数组长度相同（{len(self)} vs {len(other)}）")
+        if isinstance(other, BoolHybridArray):
+            return BoolHybridArray._from_int(self._bits_to_int() | other._bits_to_int(), self.size, self.hash_, self.Type)
         return BoolHybridArr(map(operator.or_, self, other),hash_ = self.hash_)
     def __ror__(self, other:Iterable) -> BoolHybridArray:
         return self | other
@@ -953,6 +1018,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
             other = BHA_Iterator(other)
         if len(self) != len(other):
             raise ValueError(f"异或运算要求数组长度相同（{len(self)} vs {len(other)}）")
+        if isinstance(other, BoolHybridArray):
+            return BoolHybridArray._from_int(self._bits_to_int() ^ other._bits_to_int(), self.size, self.hash_, self.Type)
         return BoolHybridArr(map(operator.xor, self, other),hash_ = self.hash_)
 
     def __rxor__(self, other:Iterable) -> BoolHybridArray:
@@ -1127,19 +1194,6 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
     def append(self,v):
         self.size += 1
         self[-1] = v
-
-    def swap(self, idx1, idx2):
-        """交换两个元素（bool 单值，无编解码成本）。"""
-        n = self.size
-        if idx1 < 0:
-            idx1 += n
-        if idx2 < 0:
-            idx2 += n
-        if not (0 <= idx1 < n and 0 <= idx2 < n):
-            raise IndexError("swap index out of range")
-        if idx1 == idx2:
-            return
-        self[idx1], self[idx2] = self[idx2], self[idx1]
 
     def move(self, idx1, length, idx2):
         """memmove 式：把 [idx1, idx1+length) 移到 [idx2, idx2+length)，长度不变，重叠安全。"""
@@ -1725,91 +1779,104 @@ C4 = 0x233333
 C5 = 0x666666
 C6 = 0x123456789
 
-def fast_pow(x : int, e : int):
-    return pow(x, e, M)
+def _fold(x):
+    while x >= M:
+        x = (x & M) + (x >> 2281)
+        if x == M:
+            x = 0
+    return x
 
-def tenth_order_mapping(x : int):
+def tenth_order_mapping(x):
     x %= M
-    x = (fast_pow(x, 210) + fast_pow(210, x) + fast_pow(x, x) - 1) & M
-    x = fast_pow(x, E1) ^ C1
-    x = (fast_pow(x, E2) + C2) & M
-    x_shr = (x >> 18) & M
+    x = (pow(x, 210, M) + pow(210, x, M) + pow(x, x, M) - 1) & M
+    x = pow(x, E1, M) ^ C1
+    x = (pow(x, E2, M) + C2) & M
+    x_shr = x >> 18
     x_shl = (x << 9) & M
-    x = fast_pow(x, E3) ^ x_shr ^ x_shl
-    x = (fast_pow(x, E4) * C3) & M
-    x = fast_pow(x, E5) ^ ((x << 21) & M)
-    x = fast_pow(x, E6) ^ C4
-    x = (fast_pow(x, E7) - C6) & M
-    x_s12 = (x >> 12) & M
+    x = pow(x, E3, M) ^ x_shr ^ x_shl
+    x = (pow(x, E4, M) * C3) & M
+    x = pow(x, E5, M) ^ ((x << 21) & M)
+    x = pow(x, E6, M) ^ C4
+    x = (pow(x, E7, M) - C6) & M
+    x_s12 = x >> 12
     x_s15 = (x << 15) & M
-    x = fast_pow(x, E8) ^ (x_s12 & x_s15)
-    x = (fast_pow(x, E9) * C6) & M
-    x = fast_pow(x, E10) ^ ((x << 33) & M)
+    x = pow(x, E8, M) ^ (x_s12 & x_s15)
+    x = (pow(x, E9, M) * C6) & M
+    x = pow(x, E10, M) ^ ((x << 33) & M)
     return x % M
 
 class UltraMersenneFractalSponge(metaclass =  ResurrectMeta):
     __slots__ = ('r','c','total_len','data_pool','_bts')
-    def __init__(self,data = None):
+    def __init__(self,data:bytes = b""):
         self.r = IV_R
         self.c = IV_C
-        self.total_len = 0
-        self.data_pool = []
-        self._bts = data
-    def absorb(self, data: bytes):
+        self.total_len: int = 0
+        self.data_pool : list = []
+        self._bts :bytes = data
+    def _absorb(self, data: bytes):
         if not data:
             return self
         self.total_len += len(data)
         step = len(data) // len(data).bit_length()
+        view = memoryview(data)
         for i in range(0, len(data), step):
-            chunk = data[i:i+step]
-            num = int.from_bytes(chunk, "big")
+            num = int.from_bytes(view[i:i+step], "big")
             self.data_pool.append(num)
             self.r = tenth_order_mapping(self.r^num)
-            term = (pow(num, 7, M) * self.r) % M
-            self.c = (self.c ^ self.r + term) % M
+            n2 = num * num % M
+            n4 = n2 * n2 % M
+            term = _fold(n4 * n2 % M * num % M * self.r)
+            self.c = _fold(self.c ^ self.r + term)
         return self
-    def update(self,bts):
+    def update(self,bts:bytes):
         self._bts += bts
+    absorb = update
     def digest(self,*a,**k):
         return bytes.fromhex(self.hexdigest(*a,**k))
-    def _fold_recursive(self, arr):
-        if len(arr) <= 2:
+    def _fold_recursive(self, arr, lo = None, hi = None):
+        if lo is None:
+            lo = 0
+            hi = len(arr)
+        ln = hi - lo
+        if ln <= 2:
             res = 0
-            for v in arr:
-                res = (res + tenth_order_mapping(v ^ res)) % M
+            for i in range(lo, hi):
+                res += tenth_order_mapping(arr[i] ^ res)
+                if res >= M:
+                    res -= M
             return res
-        mid = len(arr) >> 1
-        left = self._fold_recursive(arr[:mid])
-        right = self._fold_recursive(arr[mid:])
-        l3 = pow(left, 3, M)
-        r3 = pow(right, 3, M)
-        cross = (left * right ^ l3 + r3) % M
+        mid = lo + (ln >> 1)
+        left = self._fold_recursive(arr, lo, mid)
+        right = self._fold_recursive(arr, mid, hi)
+        l3 = left * left % M * left % M
+        r3 = right * right % M * right % M
+        cross = _fold(left * right ^ (l3 + r3))
         return tenth_order_mapping(cross)
-    def hexdigest(self,bitn = 256):
+    def hexdigest(self,bitn:int = 256):
         if self._bts:
-            self.absorb(self._bts)
-            self._bts = None
-        if bitn > 4562:
+            self._absorb(self._bts)
+            self._bts = b""
+        if bitn > 4096:
             s = ""
             while bitn >= 4096:
                 s += self.hexdigest(bitn = 4096)
                 bitn -= 4096
             s = self.hexdigest(bitn = bitn) + s
             return s
-        len3 = pow(self.total_len, 3, M)
+        len3 = self.total_len * self.total_len % M * self.total_len % M
         self.r ^= len3
-        self.c = (self.c + len3 * self.r) % M
+        self.c = _fold(self.c + len3 * self.r)
 
         fold_val = self._fold_recursive(self.data_pool)
         self.r = (self.r ^ fold_val) % M
         for _ in range(10):
             self.r = tenth_order_mapping(self.r)
             self.c = tenth_order_mapping(self.c)
-            r3 = pow(self.r, 3, M)
-            c3 = pow(self.c, 3, M)
-            cross = (r3 ^ c3 + self.r * self.c) % M
+            r3 = self.r * self.r % M * self.r % M
+            c3 = self.c * self.c % M * self.c % M
+            cross = _fold(r3 ^ (c3 + self.r * self.c))
             self.r, self.c = cross % M, (cross ^ self.r) % M
-        res = (self.r << max(0,bitn - 2281)) ^ self.c
+        res = (self.r << max(0,bitn - 2431)) ^ self.c
         mask = (1 << bitn) - 1
         return f"{res & mask:0{bitn + 3 >> 2}x}"
     squeeze = hexdigest
@@ -1833,14 +1900,14 @@ def _real_generator(in_q,out_q):
         __mt_state[i] = (1812433253 * (__mt_state[i - 1] ^ (__mt_state[i - 1] >> 30)) + i) & ((1 << 32) - 1)
     __mt_index = 0
     while in_q.get() == "next":
-        if __mt_index >= 624:
+        if __mt_index >= 600:
             for i in range(624):
                 y = ((__mt_state[i] & 0x80000000) +
                 (__mt_state[(i+1)%624] & 0x7FFFFFFF))
                 __mt_state[i] = __mt_state[(i+397)%624] ^ (y >> 1)
                 if y & 1:
                     __mt_state[i] ^= 0x9908B0DF
-                    __mt_state[i] += (
+                    __mt_state[i] = (__mt_state[i] + 
                         int.from_bytes(os.urandom(4),'big')&0xFFFFFFFF)
             __mt_index = 0
         y = __mt_state[__mt_index]
@@ -1851,7 +1918,8 @@ def _real_generator(in_q,out_q):
         y ^= (y >> 18)
         xor_result = y
         for i in range(1, 25):
-            idx = (__mt_index + i) % 624
+            idx = __mt_index + i
+            if idx >= 624:break
             xor_result ^= __mt_state[idx]
         h3 = hashlib.sha3_512(str(xor_result).encode('utf-8')).digest()
         final = hashlib.md5(h3).hexdigest()
@@ -1903,10 +1971,10 @@ def create_mt_xor25_generator():
     pub.verify(sig, umfs(msg).digest(bitn = 1024)) #这里的bitn必须和msg_digest的完全一致
     """
  
-    number = multiprocessing.cpu_count() << 1
-    in_q = [Queue() for _ in range(number)]
-    out_q = Queue()
-    processes = []
+    number: int = multiprocessing.cpu_count() << 1
+    in_q: list[Queue] = [Queue() for _ in range(number)]
+    out_q: Queue = Queue()
+    processes:list = []
     for i in range(number):
         p = multiprocessing.Process(target=_real_generator,
                                   args=(in_q[i], out_q), daemon=True)
@@ -1917,13 +1985,13 @@ def create_mt_xor25_generator():
             return next(it)
         def __iter__(self):
             while 1:
-                yield from self.batch_generate(number)
+                for i in range(number):
+                    in_q[i%len(in_q)].put("next")
+                yield from (out_q.get() for i in range(number))
         def __next__(self):
             return self()
-        def batch_generate(self,n = 1):
-            for i in range(n):
-                in_q[i%len(in_q)].put("next")
-            return BHA_Iterator(out_q.get() for i in range(n))
+        def batch_generate(self,n:int = 1):
+            return BHA_Iterator(self() for _ in range(n))
         def getrandbits(self, k: int) -> int:
             if k <= 0:
                 raise ValueError("bits must be positive")
@@ -1943,7 +2011,7 @@ def create_mt_xor25_generator():
             from .float_array import BHA_Float
             r = self.getrandbits(1024)
             return low + (BHA_Float(high) - low) * r / (1 << 1024)
-        def randrange(self, start, stop=None, step=1):
+        def randrange(self, start:int, stop:int|None=None, step:int=1):
             if stop is None:
                 stop, start = start, 0
             span = stop - start
@@ -1961,7 +2029,7 @@ def create_mt_xor25_generator():
                     if num + bias <= MAX_U128:
                         offset = num % cnt
                         return start + offset * step
-        def randint(self, a, b):
+        def randint(self, a:int, b:int):
             return self.randrange(a, b + 1)
     gen = XOR25_Generator()
     it = BHA_Iterator(iter(gen))
@@ -1969,12 +2037,12 @@ def create_mt_xor25_generator():
 mt_xor25 = create_mt_xor25_generator
 try:from ._cppiostream import *
 except:pass
-def _bhax_is_bit_set(val) -> bool:
+def _bhax_is_bit_set(val) :
     s = str(val)
     return s == '1' or s == 'True' or val is True
 
 
-def _bhax_decode_int_bits(bit_arr, bit_length: int, count: int) -> list:
+def _bhax_decode_int_bits(bit_arr, bit_length: int, count: int) :
     result = []
     for i in range(count):
         base = i * bit_length
@@ -1994,7 +2062,7 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
     INNER_SDA = "data0.sda"
     FLOAT_END_SENTINEL = "@@END_FLOAT@@"
 
-    def __new__(cls, path, *args, **kwargs):
+    def __new__(cls, path: pathlib.Path | str, *args, **kwargs):
         root = pathlib.Path(path)
         inst = super().__new__(cls)
         inst._root = root
@@ -2310,7 +2378,7 @@ class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
         if(name in protected)and(not sys.is_finalizing())and(name != '_'):
             raise AttributeError(f'禁止修改内置常量：{self.name}.{name}')
         else:
-            super().__setattr__(name,value)
+            object.__setattr__(self, name, value)
     def __import__(self, name, globals=None, locals=None, fromlist=(), level=0):
         if fromlist:
             result = []
@@ -2471,6 +2539,9 @@ class BHA_Queue(Collection, metaclass=ResurrectMeta):
             self.b.clear()
             return self.a.pop()
         raise IndexError("无法从空的 BHA_Queue 队列执行出队操作")
+    def clear(self):
+        self.a.clear()
+        self.b.clear()
 @BHA_Function
 def Create_BHA(path,arr,mode = "BHA"):
     if mode.lower() == "bhax":

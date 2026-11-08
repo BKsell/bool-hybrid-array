@@ -633,6 +633,10 @@ print(len(s))  # 输出：2
 
 print([(int(p.x), int(p.y)) for p in s])  # 输出：[(2, 2), (3, 3)]（按键升序）
 
+#forest（9.13.12版本新增）
+from bool_hybrid_array.forest import *
+#以后使用任何库都不需要import了！类似pyforest，但更强大！第三方库也支持！
+
 ```
 
 ## 性能优势
@@ -888,6 +892,8 @@ print([(int(p.x), int(p.y)) for p in s])  # 输出：[(2, 2), (3, 3)]（按键�
 * **9.13.10**：修复上个版本没发源码包的bug
 
 * **9.13.11**：修复bug，优化性能，加强MT-XOR25的安全性
+
+* **9.13.12**：新增forest子模块
 
 
 ## **彩蛋：**

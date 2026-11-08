@@ -19,7 +19,7 @@ def _item_to_row(item, struct_class):
     if isinstance(item, BHA_Struct):
         arr = item.__dict__.get("_arr")
         if arr is not None:
-            i = item.__dict__.get("index")
+            i = item.__dict__.get("_index")
             return {k: arr.attrs[k][i] for k in struct_class.__BHAStructAttrs__}
         return {k: getattr(item, k) for k in struct_class.__BHAStructAttrs__}
     row = {}
@@ -61,6 +61,47 @@ class BHA_Char(int, metaclass=ResurrectMeta):
             return int.__str__(self)
     def __repr__(self):
         return repr(chr(int(self))) if 0 <= int(self) < 0x110000 else int.__repr__(self)
+    __hash__ = int.__hash__
+    def __eq__(self, other):
+        if isinstance(other, str):
+            if len(other) == 1:
+                return int(self) == ord(other)
+            return False
+        return int.__eq__(self, other)
+    def __add__(self, other):
+        if isinstance(other, str):
+            return str(self) + other
+        if isinstance(other, BHA_Char):
+            return str(self) + str(other)
+        return int.__add__(self, other)
+    def __radd__(self, other):
+        if isinstance(other, str):
+            return other + str(self)
+        return int.__radd__(self, other)
+    def __mul__(self, other):
+        if isinstance(other, int):
+            return str(self) * int(other)
+        return int.__mul__(self, other)
+    def __rmul__(self, other):
+        if isinstance(other, int):
+            return str(self) * int(other)
+        return int.__rmul__(self, other)
+    def __lt__(self, other):
+        if isinstance(other, str):
+            return str(self) < other
+        return int.__lt__(self, other)
+    def __le__(self, other):
+        if isinstance(other, str):
+            return str(self) <= other
+        return int.__le__(self, other)
+    def __gt__(self, other):
+        if isinstance(other, str):
+            return str(self) > other
+        return int.__gt__(self, other)
+    def __ge__(self, other):
+        if isinstance(other, str):
+            return str(self) >= other
+        return int.__ge__(self, other)
 
 
 class BHA_Struct(metaclass=BHAStructMeta):
@@ -68,16 +109,14 @@ class BHA_Struct(metaclass=BHAStructMeta):
 
     def __getattr__(self, name):
         arr = self.__dict__.get("_arr")
-        i = self.__dict__.get("index")
-        if arr is None or i is None:
-            raise AttributeError(f"{type(self).__name__!r} unbound")
-        if name in arr.attrs:
+        i = self.__dict__.get("_index")
+        if arr is not None and i is not None and name in arr.attrs:
             return arr.attrs[name][i]
-        raise AttributeError(f"{type(self).__name__!r} has no field {name!r}")
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name, value):
         arr = self.__dict__.get("_arr")
-        i = self.__dict__.get("index")
+        i = self.__dict__.get("_index")
         if (arr is not None and i is not None
                 and name in arr.struct_class.__BHAStructAttrs__):
             ftype = arr.struct_class.__BHAStructAttrs__[name]
@@ -85,7 +124,21 @@ class BHA_Struct(metaclass=BHAStructMeta):
                 value = ftype(value)
             arr.attrs[name][i] = value
             return
-        object.__setattr__(self, name, value)
+        if name in ("_arr", "_index") or name in self.__class__.__BHAStructAttrs__:
+            object.__setattr__(self, name, value)
+            return
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}' and no __dict__ for setting new attributes")
+
+    def __delattr__(self, name):
+        if name in ("_arr", "_index") or name in self.__class__.__BHAStructAttrs__:
+            arr = self.__dict__.get("_arr")
+            i = self.__dict__.get("_index")
+            if arr is not None and i is not None:
+                return
+            if name in self.__dict__:
+                object.__delattr__(self, name)
+                return
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}' and no __dict__ for setting new attributes")
 
     def __init__(self, *args, **kwargs):
         cls = self.__class__
@@ -111,7 +164,7 @@ class BHA_Struct(metaclass=BHAStructMeta):
 
     def __repr__(self):
         arr = self.__dict__.get("_arr")
-        i = self.__dict__.get("index")
+        i = self.__dict__.get("_index")
         if arr is None:
             return f"<{type(self).__name__} unbound>"
         fields = ", ".join(f"{k}={arr.attrs[k][i]!r}"
@@ -120,7 +173,7 @@ class BHA_Struct(metaclass=BHAStructMeta):
 
     def __iter__(self):
         arr = self.__dict__.get("_arr")
-        i = self.__dict__.get("index")
+        i = self.__dict__.get("_index")
         if arr is None or i is None:
             raise TypeError(f"{type(self).__name__!r} unbound")
         for k in self.__class__.__BHAStructAttrs__:
@@ -128,8 +181,8 @@ class BHA_Struct(metaclass=BHAStructMeta):
 
     def __eq__(self, other):
         if isinstance(other, BHA_Struct):
-            a = self.__dict__.get("_arr"); i = self.__dict__.get("index")
-            b = other.__dict__.get("_arr"); j = other.__dict__.get("index")
+            a = self.__dict__.get("_arr"); i = self.__dict__.get("_index")
+            b = other.__dict__.get("_arr"); j = other.__dict__.get("_index")
             if a is None or b is None:
                 return NotImplemented
             if type(self) is not type(other):
@@ -144,8 +197,46 @@ class BHA_Struct(metaclass=BHAStructMeta):
         r = self.__eq__(other)
         return NotImplemented if r is NotImplemented else not r
 
+    def _cmp_tuple(self):
+        arr = self.__dict__.get("_arr"); i = self.__dict__.get("_index")
+        if arr is None:
+            return None
+        return tuple(arr.attrs[k][i] for k in self.__class__.__BHAStructAttrs__)
+
+    def __lt__(self, other):
+        if isinstance(other, BHA_Struct) and type(self) is type(other):
+            a = self._cmp_tuple(); b = other._cmp_tuple()
+            if a is None or b is None:
+                return NotImplemented
+            return a < b
+        return NotImplemented
+
+    def __le__(self, other):
+        if isinstance(other, BHA_Struct) and type(self) is type(other):
+            a = self._cmp_tuple(); b = other._cmp_tuple()
+            if a is None or b is None:
+                return NotImplemented
+            return a <= b
+        return NotImplemented
+
+    def __gt__(self, other):
+        if isinstance(other, BHA_Struct) and type(self) is type(other):
+            a = self._cmp_tuple(); b = other._cmp_tuple()
+            if a is None or b is None:
+                return NotImplemented
+            return a > b
+        return NotImplemented
+
+    def __ge__(self, other):
+        if isinstance(other, BHA_Struct) and type(self) is type(other):
+            a = self._cmp_tuple(); b = other._cmp_tuple()
+            if a is None or b is None:
+                return NotImplemented
+            return a >= b
+        return NotImplemented
+
     def as_dict(self):
-        arr = self.__dict__["_arr"]; i = self.__dict__["index"]
+        arr = self.__dict__["_arr"]; i = self.__dict__["_index"]
         return {k: arr.attrs[k][i] for k in arr.struct_class.__BHAStructAttrs__}
 
 
@@ -489,7 +580,7 @@ class StructHybridArray(MutableSequence, metaclass=ResurrectMeta):
         for k in self.struct_class.__BHAStructAttrs__:
             tmp.attrs[k][0] = self.attrs[k][key]
         object.__setattr__(old, "_arr", tmp)
-        object.__setattr__(old, "index", 0)
+        object.__setattr__(old, "_index", 0)
 
     def __del__(self):
         try:
@@ -507,7 +598,7 @@ class StructHybridArray(MutableSequence, metaclass=ResurrectMeta):
                 for k in self.struct_class.__BHAStructAttrs__:
                     tmp.attrs[k][0] = self.attrs[k][key]
                 object.__setattr__(p, "_arr", tmp)
-                object.__setattr__(p, "index", 0)
+                object.__setattr__(p, "_index", 0)
             except Exception:
                 pass
         try:
@@ -600,7 +691,7 @@ class StructHybridArray(MutableSequence, metaclass=ResurrectMeta):
         if p is None:
             p = self.struct_class.__new__(self.struct_class)
             object.__setattr__(p, "_arr", _wproxy(self))
-            object.__setattr__(p, "index", key)
+            object.__setattr__(p, "_index", key)
             self._proxies[key] = p
         self._nproxies += 1
         return p
@@ -671,7 +762,7 @@ class StructHybridArray(MutableSequence, metaclass=ResurrectMeta):
             if i == key:
                 continue
             if i > key:
-                object.__setattr__(p, "index", i - 1)
+                object.__setattr__(p, "_index", i - 1)
                 new_proxies[i - 1] = p
             else:
                 new_proxies[i] = p
@@ -693,7 +784,7 @@ class StructHybridArray(MutableSequence, metaclass=ResurrectMeta):
         self._nproxies = 0
         for i, p in self._proxies.items():
             if i >= position:
-                object.__setattr__(p, "index", i + 1)
+                object.__setattr__(p, "_index", i + 1)
                 new_proxies[i + 1] = p
             else:
                 new_proxies[i] = p
@@ -894,6 +985,14 @@ class StructHybridArray(MutableSequence, metaclass=ResurrectMeta):
     __repr__ = __str__
 
 
+def _unpack_complex(v):
+    if isinstance(v, complex):
+        return v.real, v.imag
+    if isinstance(v, BHA_Struct) and "real" in v.__BHAStructAttrs__ and "imag" in v.__BHAStructAttrs__:
+        return float(v.real), float(v.imag)
+    return float(v), 0.0
+
+
 class BHA_Complex(BHA_Struct):
     __BHAStructAttrs__ = {"real": float, "imag": float}
     def __init__(self, real=0.0, imag=0.0):
@@ -908,45 +1007,54 @@ class BHA_Complex(BHA_Struct):
         return hash((float(self.real), float(self.imag)))
 
     def __eq__(self, o):
-        if isinstance(o, BHA_Struct):
+        if isinstance(o, BHA_Struct) and "real" in o.__BHAStructAttrs__ and "imag" in o.__BHAStructAttrs__:
             return (float(self.real), float(self.imag)) == (float(o.real), float(o.imag))
         if isinstance(o, (int, float, complex)):
             return complex(float(self.real), float(self.imag)) == o
         return NotImplemented
-    def conjugate(self): return complex(float(self.real), -float(self.imag))
+    def conjugate(self): return BHA_Complex(float(self.real), -float(self.imag))
     def magnitude(self): return (float(self.real) ** 2 + float(self.imag) ** 2) ** 0.5
     def to_complex(self): return complex(float(self.real), float(self.imag))
     def __abs__(self): return self.magnitude()
     def __complex__(self): return self.to_complex()
     def __add__(self, o):
-        if isinstance(o, BHA_Struct):
-            return complex(float(self.real) + float(o.real), float(self.imag) + float(o.imag))
-        return complex(float(self.real) + float(o), float(self.imag))
+        a, b = float(self.real), float(self.imag)
+        c, d = _unpack_complex(o)
+        return BHA_Complex(a + c, b + d)
     def __radd__(self, o): return self + o
     def __sub__(self, o):
-        if isinstance(o, BHA_Struct):
-            return complex(float(self.real) - float(o.real), float(self.imag) - float(o.imag))
-        return complex(float(self.real) - float(o), float(self.imag))
+        a, b = float(self.real), float(self.imag)
+        c, d = _unpack_complex(o)
+        return BHA_Complex(a - c, b - d)
     def __rsub__(self, o):
-        if isinstance(o, BHA_Struct):
-            return complex(float(o.real) - float(self.real), float(o.imag) - float(self.imag))
-        return complex(float(o) - float(self.real), -float(self.imag))
+        a, b = float(self.real), float(self.imag)
+        c, d = _unpack_complex(o)
+        return BHA_Complex(c - a, d - b)
     def __mul__(self, o):
-        if isinstance(o, BHA_Struct):
-            a, b = float(self.real), float(self.imag)
-            c, d = float(o.real), float(o.imag)
-            return complex(a * c - b * d, a * d + b * c)
-        return complex(float(self.real) * float(o), float(self.imag) * float(o))
+        a, b = float(self.real), float(self.imag)
+        c, d = _unpack_complex(o)
+        return BHA_Complex(a * c - b * d, a * d + b * c)
     def __rmul__(self, o): return self * o
     def __truediv__(self, o):
-        if isinstance(o, BHA_Struct):
-            a, b = float(self.real), float(self.imag)
-            c, d = float(o.real), float(o.imag)
-            denom = c * c + d * d
-            return complex((a * c + b * d) / denom, (b * c - a * d) / denom)
-        return complex(float(self.real) / float(o), float(self.imag) / float(o))
-    def __neg__(self): return complex(-float(self.real), -float(self.imag))
-    def __pos__(self): return self.to_complex()
+        a, b = float(self.real), float(self.imag)
+        c, d = _unpack_complex(o)
+        denom = c * c + d * d
+        return BHA_Complex((a * c + b * d) / denom, (b * c - a * d) / denom)
+    def __rtruediv__(self, o):
+        a, b = float(self.real), float(self.imag)
+        c, d = _unpack_complex(o)
+        denom = a * a + b * b
+        return BHA_Complex((a * c + b * d) / denom, (a * d - b * c) / denom)
+    def __pow__(self, n):
+        c = complex(float(self.real), float(self.imag)) ** n
+        return BHA_Complex(c.real, c.imag)
+    def __neg__(self): return BHA_Complex(-float(self.real), -float(self.imag))
+    def __pos__(self): return BHA_Complex(float(self.real), float(self.imag))
+    def __repr__(self):
+        r, i = float(self.real), float(self.imag)
+        return f"BHA_Complex({r}+{i}j)" if i >= 0 else f"BHA_Complex({r}{i}j)"
+    def __str__(self):
+        return str(complex(float(self.real), float(self.imag)))
 
 
 class BHA_Slice(BHA_Struct):
@@ -960,10 +1068,28 @@ class BHA_Slice(BHA_Struct):
             start, stop = 0, start
         self.start, self.stop, self.step = start, stop, step
     def indices(self, n): return slice(self.start, self.stop, self.step).indices(n)
+    def __eq__(self, o):
+        if isinstance(o, BHA_Slice):
+            return (self.start, self.stop, self.step) == (o.start, o.stop, o.step)
+        if isinstance(o, slice):
+            return (self.start, self.stop, self.step) == (o.start, o.stop, o.step)
+        return NotImplemented
+    def __repr__(self): return f"BHA_Slice({self.start}, {self.stop}, {self.step})"
+    def __str__(self): return f"slice({self.start}, {self.stop}, {self.step})"
 
 
 class BHA_Rect(BHA_Struct):
     __BHAStructAttrs__ = {"x": int, "y": int, "w": int, "h": int}
+    def __init__(self, x=0, y=0, w=0, h=0):
+        if isinstance(x, (tuple, list)):
+            _w, _h = y, w
+            x, y = x[0], x[1]
+            w, h = _w, _h
+        elif isinstance(x, (dict, BHA_Struct)):
+            d = x.as_dict() if isinstance(x, BHA_Struct) else x
+            x = d.get("x", 0); y = d.get("y", 0); w = d.get("w", 0); h = d.get("h", 0)
+        self.x, self.y, self.w, self.h = x, y, w, h
+    def __repr__(self): return f"BHA_Rect(({int(self.x)}, {int(self.y)}), {int(self.w)}, {int(self.h)})"
     def area(self): return int(self.w) * int(self.h)
     def contains(self, x, y):
         return int(self.x) <= x < int(self.x) + int(self.w) and int(self.y) <= y < int(self.y) + int(self.h)
@@ -977,12 +1103,18 @@ class BHA_Rect(BHA_Struct):
 class BHA_RGBA(BHA_Struct):
     __BHAStructAttrs__ = {"r": BHA_Char, "g": BHA_Char, "b": BHA_Char, "a": BHA_Char}
     def __init__(self, r=0, g=0, b=0, a=255):
-        if isinstance(r, (dict, BHA_Struct)):
+        if isinstance(r, str):
+            s = r.lstrip('#')
+            r, g, b = int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+            a = int(s[6:8], 16) if len(s) >= 8 else 255
+        elif isinstance(r, (dict, BHA_Struct)):
             d = r.as_dict() if isinstance(r, BHA_Struct) else r
             r = d.get("r", 0); g = d.get("g", 0); b = d.get("b", 0); a = d.get("a", 255)
         self.r, self.g, self.b, self.a = r, g, b, a
+    def __repr__(self): return f'BHA_RGBA("{self.to_hex()}")'
     def to_hex(self):
         return "#{:02X}{:02X}{:02X}{:02X}".format(max(0, min(255, int(self.r))), max(0, min(255, int(self.g))), max(0, min(255, int(self.b))), max(0, min(255, int(self.a))))
+    def __str__(self): return self.to_hex()
     def __eq__(self, o):
         if isinstance(o, BHA_RGBA):
             return (int(self.r) == int(o.r) and int(self.g) == int(o.g)
@@ -992,11 +1124,29 @@ class BHA_RGBA(BHA_Struct):
 
 class BHA_RGB(BHA_Struct):
     __BHAStructAttrs__ = {"r": BHA_Char, "g": BHA_Char, "b": BHA_Char}
+    def __init__(self, r=0, g=0, b=0):
+        if isinstance(r, str):
+            s = r.lstrip('#')
+            r, g, b = int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+        elif isinstance(r, (dict, BHA_Struct)):
+            d = r.as_dict() if isinstance(r, BHA_Struct) else r
+            r = d.get("r", 0); g = d.get("g", 0); b = d.get("b", 0)
+        self.r, self.g, self.b = r, g, b
+    def __repr__(self): return f'BHA_RGB("{self.to_hex()}")'
+    def __eq__(self, o):
+        if isinstance(o, BHA_RGB): return (int(self.r), int(self.g), int(self.b)) == (int(o.r), int(o.g), int(o.b))
+        return NotImplemented
     def to_hex(self): return "#{:02X}{:02X}{:02X}".format(max(0, min(255, int(self.r))), max(0, min(255, int(self.g))), max(0, min(255, int(self.b))))
+    def __str__(self): return self.to_hex()
 
 
 class BHA_Vec2(BHA_Struct):
     __BHAStructAttrs__ = {"x": float, "y": float}
+    def __repr__(self): return f"BHA_Vec2({float(self.x)}, {float(self.y)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Vec2): return float(self.x) == float(o.x) and float(self.y) == float(o.y)
+        return NotImplemented
+    def __str__(self): return "(" + str(float(self.x)) + ", " + str(float(self.y)) + ")"
     def dot(self, o): return float(self.x) * float(o.x) + float(self.y) * float(o.y)
     def length(self): return (float(self.x) ** 2 + float(self.y) ** 2) ** 0.5
     def normalized(self):
@@ -1010,13 +1160,21 @@ class BHA_Vec2(BHA_Struct):
         if set(o.__BHAStructAttrs__) != {"x", "y"}:
             return NotImplemented
         return BHA_Vec2(float(self.x) - float(o.x), float(self.y) - float(o.y))
-    def __mul__(self, s): return BHA_Vec2(float(self.x) * float(s), float(self.y) * float(s))
+    def __mul__(self, s):
+        if isinstance(s, BHA_Mat2):
+            return s.transpose() * self
+        return BHA_Vec2(float(self.x) * float(s), float(self.y) * float(s))
     def __rmul__(self, s): return self * s
     def __neg__(self): return BHA_Vec2(-float(self.x), -float(self.y))
 
 
 class BHA_Vec3(BHA_Struct):
     __BHAStructAttrs__ = {"x": float, "y": float, "z": float}
+    def __repr__(self): return f"BHA_Vec3({float(self.x)}, {float(self.y)}, {float(self.z)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Vec3): return (float(self.x), float(self.y), float(self.z)) == (float(o.x), float(o.y), float(o.z))
+        return NotImplemented
+    def __str__(self): return "(" + str(float(self.x)) + ", " + str(float(self.y)) + ", " + str(float(self.z)) + ")"
     def dot(self, o): return float(self.x) * float(o.x) + float(self.y) * float(o.y) + float(self.z) * float(o.z)
     def cross(self, o):
         return BHA_Vec3(float(self.y) * float(o.z) - float(self.z) * float(o.y),
@@ -1036,13 +1194,21 @@ class BHA_Vec3(BHA_Struct):
         if set(o.__BHAStructAttrs__) != {"x", "y", "z"}:
             return NotImplemented
         return BHA_Vec3(float(self.x) - float(o.x), float(self.y) - float(o.y), float(self.z) - float(o.z))
-    def __mul__(self, s): return BHA_Vec3(float(self.x) * float(s), float(self.y) * float(s), float(self.z) * float(s))
+    def __mul__(self, s):
+        if isinstance(s, BHA_Mat3):
+            return s.transpose() * self
+        return BHA_Vec3(float(self.x) * float(s), float(self.y) * float(s), float(self.z) * float(s))
     def __rmul__(self, s): return self * s
     def __neg__(self): return BHA_Vec3(-float(self.x), -float(self.y), -float(self.z))
 
 
 class BHA_Vec4(BHA_Struct):
     __BHAStructAttrs__ = {"x": float, "y": float, "z": float, "w": float}
+    def __repr__(self): return f"BHA_Vec4({float(self.x)}, {float(self.y)}, {float(self.z)}, {float(self.w)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Vec4): return (float(self.x), float(self.y), float(self.z), float(self.w)) == (float(o.x), float(o.y), float(o.z), float(o.w))
+        return NotImplemented
+    def __str__(self): return "(" + str(float(self.x)) + ", " + str(float(self.y)) + ", " + str(float(self.z)) + ", " + str(float(self.w)) + ")"
     def dot(self, o):
         return (float(self.x) * float(o.x) + float(self.y) * float(o.y)
                 + float(self.z) * float(o.z) + float(self.w) * float(o.w))
@@ -1066,6 +1232,18 @@ class BHA_Vec4(BHA_Struct):
 
 class BHA_Point(BHA_Struct):
     __BHAStructAttrs__ = {"x": int, "y": int}
+    def __repr__(self): return f"BHA_Point({int(self.x)}, {int(self.y)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Point): return (int(self.x), int(self.y)) == (int(o.x), int(o.y))
+        return NotImplemented
+    def __str__(self): return "(" + str(int(self.x)) + ", " + str(int(self.y)) + ")"
+    def dot(self, o):
+        return int(self.x) * int(o.x) + int(self.y) * int(o.y)
+    def length(self):
+        return (float(self.x) ** 2 + float(self.y) ** 2) ** 0.5
+    def normalized(self):
+        n = self.length()
+        return BHA_Vec2(0.0, 0.0) if n == 0 else BHA_Vec2(float(self.x) / n, float(self.y) / n)
     def __add__(self, o):
         if set(o.__BHAStructAttrs__) != {"x", "y"}:
             return NotImplemented
@@ -1078,6 +1256,18 @@ class BHA_Point(BHA_Struct):
 
 class BHA_Point3D(BHA_Struct):
     __BHAStructAttrs__ = {"x": int, "y": int, "z": int}
+    def __repr__(self): return f"BHA_Point3D({int(self.x)}, {int(self.y)}, {int(self.z)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Point3D): return (int(self.x), int(self.y), int(self.z)) == (int(o.x), int(o.y), int(o.z))
+        return NotImplemented
+    def __str__(self): return "(" + str(int(self.x)) + ", " + str(int(self.y)) + ", " + str(int(self.z)) + ")"
+    def dot(self, o):
+        return int(self.x) * int(o.x) + int(self.y) * int(o.y) + int(self.z) * int(o.z)
+    def length(self):
+        return (float(self.x) ** 2 + float(self.y) ** 2 + float(self.z) ** 2) ** 0.5
+    def normalized(self):
+        n = self.length()
+        return BHA_Vec3(0.0, 0.0, 0.0) if n == 0 else BHA_Vec3(float(self.x) / n, float(self.y) / n, float(self.z) / n)
     def __add__(self, o):
         if set(o.__BHAStructAttrs__) != {"x", "y", "z"}:
             return NotImplemented
@@ -1090,6 +1280,11 @@ class BHA_Point3D(BHA_Struct):
 
 class BHA_Quaternion(BHA_Struct):
     __BHAStructAttrs__ = {"x": float, "y": float, "z": float, "w": float}
+    def __repr__(self): return f"BHA_Quaternion({float(self.x)}, {float(self.y)}, {float(self.z)}, {float(self.w)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Quaternion): return (float(self.x), float(self.y), float(self.z), float(self.w)) == (float(o.x), float(o.y), float(o.z), float(o.w))
+        return NotImplemented
+    def __str__(self): return "(" + str(float(self.x)) + ", " + str(float(self.y)) + ", " + str(float(self.z)) + ", " + str(float(self.w)) + ")"
     def __init__(self, x=0.0, y=0.0, z=0.0, w=1.0):
         if isinstance(x, (dict, BHA_Struct)):
             d = x.as_dict() if isinstance(x, BHA_Struct) else x
@@ -1144,13 +1339,102 @@ class BHA_Range(BHA_Struct):
         if stop is None:
             start, stop = 0, start
         self.start, self.stop, self.step = start, stop, step
-    def contains(self, v): return int(self.start) <= v < int(self.stop)
-    def length(self): return int(self.stop) - int(self.start)
+    def _r(self):
+        return range(int(self.start), int(self.stop), int(self.step))
+    def __iter__(self):
+        return iter(self._r())
+    def __len__(self):
+        return len(self._r())
+    def __getitem__(self, i):
+        return self._r()[i]
+    def __contains__(self, v):
+        return v in self._r()
+    def index(self, v):
+        return self._r().index(v)
+    def count(self, v):
+        return 1 if v in self else 0
+    def __eq__(self, o):
+        if isinstance(o, BHA_Range):
+            return (int(self.start), int(self.stop), int(self.step)) == (int(o.start), int(o.stop), int(o.step))
+        if isinstance(o, range):
+            return (int(self.start), int(self.stop), int(self.step)) == (o.start, o.stop, o.step)
+        return NotImplemented
+    def __repr__(self):
+        return f"BHA_Range({int(self.start)}, {int(self.stop)}, {int(self.step)})"
+    def contains(self, v): return v in self
+    def length(self): return len(self)
     def to_slice(self): return slice(int(self.start), int(self.stop), int(self.step))
+
+
+class BHA_FRange(BHA_Struct):
+    __BHAStructAttrs__ = {"start": float, "stop": float, "step": float}
+    def __init__(self, start=0.0, stop=None, step=1.0):
+        if isinstance(start, (dict, BHA_Struct)):
+            d = start.as_dict() if isinstance(start, BHA_Struct) else start
+            self.start = float(d.get("start", 0.0)); self.stop = float(d.get("stop", 0.0)); self.step = float(d.get("step", 1.0))
+            return
+        if stop is None:
+            start, stop = 0.0, start
+        self.start, self.stop, self.step = float(start), float(stop), float(step)
+    def _len(self):
+        start, stop, step = float(self.start), float(self.stop), float(self.step)
+        if step == 0.0:
+            raise ValueError("frange() step must not be zero")
+        if step > 0:
+            n = int((stop - start) / step)
+            if start + n * step < stop:
+                n += 1
+        else:
+            n = int((stop - start) / step)
+            if start + n * step > stop:
+                n += 1
+        return max(0, n)
+    def __len__(self):
+        return self._len()
+    def __iter__(self):
+        start, step = float(self.start), float(self.step)
+        for i in range(self._len()):
+            yield start + i * step
+    def __getitem__(self, i):
+        n = self._len()
+        if isinstance(i, slice):
+            return [self.start + k * self.step for k in range(*i.indices(n))]
+        if i < 0:
+            i += n
+        if not (0 <= i < n):
+            raise IndexError(i)
+        return float(self.start) + i * float(self.step)
+    def __contains__(self, v):
+        start, stop, step = float(self.start), float(self.stop), float(self.step)
+        if step > 0:
+            if not (start <= v < stop):
+                return False
+        else:
+            if not (start >= v > stop):
+                return False
+        t = (v - start) / step
+        return abs(t - round(t)) < 1e-9
+    def count(self, v):
+        return 1 if v in self else 0
+    def index(self, v):
+        start, stop, step = float(self.start), float(self.stop), float(self.step)
+        n = self._len()
+        t = (v - start) / step
+        idx = round(t)
+        if abs(start + idx * step - v) > 1e-9 or not (0 <= idx < n):
+            raise ValueError(f"{v!r} not in frange")
+        return idx
+    def __eq__(self, o):
+        if isinstance(o, BHA_FRange):
+            return (float(self.start), float(self.stop), float(self.step)) == (float(o.start), float(o.stop), float(o.step))
+        return NotImplemented
+    def __repr__(self):
+        return f"BHA_FRange({float(self.start)}, {float(self.stop)}, {float(self.step)})"
 
 
 class BHA_Time(BHA_Struct):
     __BHAStructAttrs__ = {"hour": int, "minute": int, "second": int}
+    def __repr__(self): return f"BHA_Time({int(self.hour)}, {int(self.minute)}, {int(self.second)})"
     def __init__(self, hour=None, minute=None, second=None):
         if hour is None and minute is None and second is None:
             now = _datetime.datetime.now()
@@ -1174,12 +1458,35 @@ class BHA_Time(BHA_Struct):
     def to_seconds(self): return int(self.hour) * 3600 + int(self.minute) * 60 + int(self.second)
     def __str__(self): return f"{int(self.hour):02d}:{int(self.minute):02d}:{int(self.second):02d}"
     def isoformat(self): return self.__str__()
+    @classmethod
+    def now(cls):
+        t = _datetime.datetime.now()
+        return cls(t.hour, t.minute, t.second)
+    @classmethod
+    def fromisoformat(cls, s):
+        parts = s.split(":")
+        if len(parts) not in (2, 3):
+            raise ValueError(f"Invalid isoformat string: {s!r}")
+        h = int(parts[0]); m = int(parts[1]); sec = int(parts[2]) if len(parts) == 3 else 0
+        return cls(h, m, sec)
+    def strftime(self, fmt):
+        return _datetime.time(int(self.hour), int(self.minute), int(self.second)).strftime(fmt)
+    def replace(self, hour=None, minute=None, second=None):
+        return BHA_Time(
+            int(self.hour) if hour is None else hour,
+            int(self.minute) if minute is None else minute,
+            int(self.second) if second is None else second)
     def __lt__(self, o): return (int(self.hour), int(self.minute), int(self.second)) < (int(o.hour), int(o.minute), int(o.second))
     def __le__(self, o): return (int(self.hour), int(self.minute), int(self.second)) <= (int(o.hour), int(o.minute), int(o.second))
+    def __eq__(self, o):
+        if isinstance(o, BHA_Time):
+            return (int(self.hour), int(self.minute), int(self.second)) == (int(o.hour), int(o.minute), int(o.second))
+        return NotImplemented
 
 
 class BHA_Date(BHA_Struct):
     __BHAStructAttrs__ = {"year": int, "month": int, "day": int}
+    def __repr__(self): return f"BHA_Date({int(self.year)}, {int(self.month)}, {int(self.day)})"
     def __init__(self, year=None, month=None, day=None):
         if year is None and month is None and day is None:
             now = _datetime.datetime.now()
@@ -1203,8 +1510,33 @@ class BHA_Date(BHA_Struct):
         self.year, self.month, self.day = year, month, day
     def __str__(self): return f"{int(self.year):04d}-{int(self.month):02d}-{int(self.day):02d}"
     def isoformat(self): return self.__str__()
+    @classmethod
+    def today(cls):
+        t = _datetime.date.today()
+        return cls(t.year, t.month, t.day)
+    @classmethod
+    def fromisoformat(cls, s):
+        parts = s.split("-")
+        if len(parts) != 3:
+            raise ValueError(f"Invalid isoformat string: {s!r}")
+        return cls(int(parts[0]), int(parts[1]), int(parts[2]))
+    def strftime(self, fmt):
+        return _datetime.date(int(self.year), int(self.month), int(self.day)).strftime(fmt)
+    def weekday(self):
+        return _datetime.date(int(self.year), int(self.month), int(self.day)).weekday()
+    def isoweekday(self):
+        return _datetime.date(int(self.year), int(self.month), int(self.day)).isoweekday()
+    def replace(self, year=None, month=None, day=None):
+        return BHA_Date(
+            int(self.year) if year is None else year,
+            int(self.month) if month is None else month,
+            int(self.day) if day is None else day)
     def __lt__(self, o): return (int(self.year), int(self.month), int(self.day)) < (int(o.year), int(o.month), int(o.day))
     def __le__(self, o): return (int(self.year), int(self.month), int(self.day)) <= (int(o.year), int(o.month), int(o.day))
+    def __eq__(self, o):
+        if isinstance(o, BHA_Date):
+            return (int(self.year), int(self.month), int(self.day)) == (int(o.year), int(o.month), int(o.day))
+        return NotImplemented
     def to_datetime(self):
         return _datetime.date(int(self.year), int(self.month), int(self.day))
     def sub(self, o):
@@ -1213,6 +1545,7 @@ class BHA_Date(BHA_Struct):
 
 class BHA_DateTime(BHA_Struct):
     __BHAStructAttrs__ = {"year": int, "month": int, "day": int, "hour": int, "minute": int, "second": int}
+    def __repr__(self): return f"BHA_DateTime({int(self.year)}, {int(self.month)}, {int(self.day)}, {int(self.hour)}, {int(self.minute)}, {int(self.second)})"
     def __init__(self, year=None, month=None, day=None, hour=None, minute=None, second=None):
         if year is None and month is None and day is None and hour is None and minute is None and second is None:
             now = _datetime.datetime.now()
@@ -1254,22 +1587,82 @@ class BHA_DateTime(BHA_Struct):
     def isoformat(self):
         return (f"{int(self.year):04d}-{int(self.month):02d}-{int(self.day):02d}"
                 f"T{int(self.hour):02d}:{int(self.minute):02d}:{int(self.second):02d}")
+    @classmethod
+    def now(cls):
+        n = _datetime.datetime.now()
+        return cls(n.year, n.month, n.day, n.hour, n.minute, n.second)
+    @classmethod
+    def fromisoformat(cls, s):
+        if "T" in s:
+            dp, tp = s.split("T", 1)
+        elif " " in s:
+            dp, tp = s.split(" ", 1)
+        else:
+            dp, tp = s, "00:00:00"
+        y, m, d = (int(x) for x in dp.split("-"))
+        hh, mm, ss = (int(x) for x in tp.split(":"))
+        return cls(y, m, d, hh, mm, ss)
+    def date(self):
+        return BHA_Date(int(self.year), int(self.month), int(self.day))
+    def time(self):
+        return BHA_Time(int(self.hour), int(self.minute), int(self.second))
+    def timestamp(self):
+        return _datetime.datetime(int(self.year), int(self.month), int(self.day),
+                                  int(self.hour), int(self.minute), int(self.second)).timestamp()
+    def strftime(self, fmt):
+        return _datetime.datetime(int(self.year), int(self.month), int(self.day),
+                                  int(self.hour), int(self.minute), int(self.second)).strftime(fmt)
+    def replace(self, year=None, month=None, day=None, hour=None, minute=None, second=None):
+        return BHA_DateTime(
+            int(self.year) if year is None else year,
+            int(self.month) if month is None else month,
+            int(self.day) if day is None else day,
+            int(self.hour) if hour is None else hour,
+            int(self.minute) if minute is None else minute,
+            int(self.second) if second is None else second)
     def __lt__(self, o):
         a = (int(self.year), int(self.month), int(self.day),
              int(self.hour), int(self.minute), int(self.second))
         b = (int(o.year), int(o.month), int(o.day),
              int(o.hour), int(o.minute), int(o.second))
         return a < b
+    def __eq__(self, o):
+        if isinstance(o, BHA_DateTime):
+            return (int(self.year), int(self.month), int(self.day),
+                    int(self.hour), int(self.minute), int(self.second)) == (
+                   int(o.year), int(o.month), int(o.day),
+                   int(o.hour), int(o.minute), int(o.second))
+        return NotImplemented
 
 
 class BHA_BBox(BHA_Struct):
     __BHAStructAttrs__ = {"min_x": int, "min_y": int, "max_x": int, "max_y": int}
+    def __init__(self, min_x=0, min_y=0, max_x=0, max_y=0):
+        if isinstance(min_x, (tuple, list)):
+            _corner2 = min_y
+            min_x, min_y = min_x[0], min_x[1]
+            if isinstance(_corner2, (tuple, list)):
+                max_x, max_y = _corner2[0], _corner2[1]
+        elif isinstance(min_x, (dict, BHA_Struct)):
+            d = min_x.as_dict() if isinstance(min_x, BHA_Struct) else min_x
+            min_x = d.get("min_x", 0); min_y = d.get("min_y", 0); max_x = d.get("max_x", 0); max_y = d.get("max_y", 0)
+        self.min_x, self.min_y, self.max_x, self.max_y = min_x, min_y, max_x, max_y
+    def __repr__(self): return f"BHA_BBox(({int(self.min_x)}, {int(self.min_y)}), ({int(self.max_x)}, {int(self.max_y)}))"
+    def __eq__(self, o):
+        if isinstance(o, BHA_BBox):
+            return (int(self.min_x), int(self.min_y), int(self.max_x), int(self.max_y)) == (int(o.min_x), int(o.min_y), int(o.max_x), int(o.max_y))
+        return NotImplemented
     def contains(self, x, y): return int(self.min_x) <= x <= int(self.max_x) and int(self.min_y) <= y <= int(self.max_y)
     def area(self): return (int(self.max_x) - int(self.min_x)) * (int(self.max_y) - int(self.min_y))
 
 
 class BHA_UV(BHA_Struct):
     __BHAStructAttrs__ = {"u": float, "v": float}
+    def __repr__(self): return f"BHA_UV({float(self.u)}, {float(self.v)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_UV): return float(self.u) == float(o.u) and float(self.v) == float(o.v)
+        return NotImplemented
+    def __str__(self): return "(" + str(float(self.u)) + ", " + str(float(self.v)) + ")"
     def flip_v(self): return BHA_UV(float(self.u), 1.0 - float(self.v))
     def __add__(self, o):
         if set(o.__BHAStructAttrs__) != {"u", "v"}:
@@ -1279,8 +1672,24 @@ class BHA_UV(BHA_Struct):
 
 class BHA_ColorF(BHA_Struct):
     __BHAStructAttrs__ = {"r": float, "g": float, "b": float, "a": float}
+    def __repr__(self):
+        r = max(0, min(255, int(round(float(self.r) * 255))))
+        g = max(0, min(255, int(round(float(self.g) * 255))))
+        b = max(0, min(255, int(round(float(self.b) * 255))))
+        a = max(0, min(255, int(round(float(self.a) * 255))))
+        return 'BHA_ColorF("#{:02X}{:02X}{:02X}{:02X}")'.format(r, g, b, a)
+    def __eq__(self, o):
+        if isinstance(o, BHA_ColorF): return (float(self.r), float(self.g), float(self.b), float(self.a)) == (float(o.r), float(o.g), float(o.b), float(o.a))
+        return NotImplemented
+    def __str__(self): return "(" + str(float(self.r)) + ", " + str(float(self.g)) + ", " + str(float(self.b)) + ", " + str(float(self.a)) + ")"
     def __init__(self, r=0.0, g=0.0, b=0.0, a=1.0):
-        if isinstance(r, (dict, BHA_Struct)):
+        if isinstance(r, str):
+            s = r.lstrip('#')
+            r = int(s[0:2], 16) / 255.0
+            g = int(s[2:4], 16) / 255.0
+            b = int(s[4:6], 16) / 255.0
+            a = int(s[6:8], 16) / 255.0 if len(s) >= 8 else 1.0
+        elif isinstance(r, (dict, BHA_Struct)):
             d = r.as_dict() if isinstance(r, BHA_Struct) else r
             r = d.get("r", 0.0); g = d.get("g", 0.0); b = d.get("b", 0.0); a = d.get("a", 1.0)
         self.r, self.g, self.b, self.a = r, g, b, a
@@ -1299,6 +1708,20 @@ class BHA_ColorF(BHA_Struct):
             r, g, b, a = (int(s[i:i + 2], 16) for i in (0, 2, 4, 6))
             return cls(r / 255.0, g / 255.0, b / 255.0, a / 255.0)
         raise ValueError(f"无效 hex 颜色: #{s}")
+    @classmethod
+    def from_rgb(cls, r, g, b):
+        return cls(int(r) / 255.0, int(g) / 255.0, int(b) / 255.0, 1.0)
+    @classmethod
+    def from_rgba(cls, r, g, b, a):
+        return cls(int(r) / 255.0, int(g) / 255.0, int(b) / 255.0, int(a) / 255.0)
+    @classmethod
+    def from_hsv(cls, h, s, v):
+        r, g, b = _colorsys.hsv_to_rgb(float(h), float(s), float(v))
+        return cls(r, g, b, 1.0)
+    @classmethod
+    def from_hsva(cls, h, s, v, a):
+        r, g, b = _colorsys.hsv_to_rgb(float(h), float(s), float(v))
+        return cls(r, g, b, float(a))
     def to_rgb(self):
         r, g, b, _ = self.to_rgba8()
         return BHA_RGB(r, g, b)
@@ -1339,16 +1762,56 @@ class BHA_ColorF(BHA_Struct):
 
 class BHA_Size(BHA_Struct):
     __BHAStructAttrs__ = {"w": int, "h": int}
+    def __init__(self, w=0, h=0):
+        if isinstance(w, str):
+            w, h = w.split("x"); w = int(w); h = int(h)
+        elif isinstance(w, (tuple, list)):
+            w, h = w[0], w[1]
+        elif isinstance(w, (dict, BHA_Struct)):
+            d = w.as_dict() if isinstance(w, BHA_Struct) else w
+            w = d.get("w", 0); h = d.get("h", 0)
+        self.w, self.h = w, h
+    def __repr__(self): return f"BHA_Size({int(self.w)}, {int(self.h)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Size): return (int(self.w), int(self.h)) == (int(o.w), int(o.h))
+        return NotImplemented
+    def __str__(self): return str(int(self.w)) + "x" + str(int(self.h))
     def area(self): return int(self.w) * int(self.h)
 
 
 class BHA_SizeF(BHA_Struct):
     __BHAStructAttrs__ = {"w": float, "h": float}
+    def __init__(self, w=0.0, h=0.0):
+        if isinstance(w, str):
+            w, h = w.split("x"); w = float(w); h = float(h)
+        elif isinstance(w, (tuple, list)):
+            w, h = w[0], w[1]
+        elif isinstance(w, (dict, BHA_Struct)):
+            d = w.as_dict() if isinstance(w, BHA_Struct) else w
+            w = d.get("w", 0.0); h = d.get("h", 0.0)
+        self.w, self.h = w, h
+    def __repr__(self): return f"BHA_SizeF({float(self.w)}, {float(self.h)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_SizeF): return float(self.w) == float(o.w) and float(self.h) == float(o.h)
+        return NotImplemented
+    def __str__(self): return str(float(self.w)) + "x" + str(float(self.h))
     def area(self): return float(self.w) * float(self.h)
 
 
 class BHA_Circle(BHA_Struct):
     __BHAStructAttrs__ = {"x": float, "y": float, "r": float}
+    def __init__(self, x=0.0, y=0.0, r=0.0):
+        if isinstance(x, (tuple, list)):
+            x, y, r = x[0], x[1], y
+        elif isinstance(x, (dict, BHA_Struct)):
+            d = x.as_dict() if isinstance(x, BHA_Struct) else x
+            x = d.get("x", 0.0); y = d.get("y", 0.0); r = d.get("r", 0.0)
+        self.x, self.y, self.r = x, y, r
+    def __repr__(self): return f"BHA_Circle(({float(self.x)}, {float(self.y)}), {float(self.r)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Circle):
+            return (float(self.x), float(self.y), float(self.r)) == (float(o.x), float(o.y), float(o.r))
+        return NotImplemented
     def area(self): return _math.pi * float(self.r) ** 2
     def contains(self, x, y):
         dx = float(x) - float(self.x); dy = float(y) - float(self.y)
@@ -1357,6 +1820,18 @@ class BHA_Circle(BHA_Struct):
 
 class BHA_Sphere(BHA_Struct):
     __BHAStructAttrs__ = {"x": float, "y": float, "z": float, "r": float}
+    def __init__(self, x=0.0, y=0.0, z=0.0, r=0.0):
+        if isinstance(x, (tuple, list)):
+            x, y, z, r = x[0], x[1], x[2], y
+        elif isinstance(x, (dict, BHA_Struct)):
+            d = x.as_dict() if isinstance(x, BHA_Struct) else x
+            x = d.get("x", 0.0); y = d.get("y", 0.0); z = d.get("z", 0.0); r = d.get("r", 0.0)
+        self.x, self.y, self.z, self.r = x, y, z, r
+    def __repr__(self): return f"BHA_Sphere(({float(self.x)}, {float(self.y)}, {float(self.z)}), {float(self.r)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Sphere):
+            return (float(self.x), float(self.y), float(self.z), float(self.r)) == (float(o.x), float(o.y), float(o.z), float(o.r))
+        return NotImplemented
     def volume(self): return (4.0 / 3.0) * _math.pi * float(self.r) ** 3
     def contains(self, x, y, z):
         dx = float(x) - float(self.x); dy = float(y) - float(self.y); dz = float(z) - float(self.z)
@@ -1365,6 +1840,21 @@ class BHA_Sphere(BHA_Struct):
 
 class BHA_Line(BHA_Struct):
     __BHAStructAttrs__ = {"x1": float, "y1": float, "x2": float, "y2": float}
+    def __init__(self, x1=0.0, y1=0.0, x2=0.0, y2=0.0):
+        if isinstance(x1, (tuple, list)):
+            _p2 = y1
+            x1, y1 = x1[0], x1[1]
+            if isinstance(_p2, (tuple, list)):
+                x2, y2 = _p2[0], _p2[1]
+        elif isinstance(x1, (dict, BHA_Struct)):
+            d = x1.as_dict() if isinstance(x1, BHA_Struct) else x1
+            x1 = d.get("x1", 0.0); y1 = d.get("y1", 0.0); x2 = d.get("x2", 0.0); y2 = d.get("y2", 0.0)
+        self.x1, self.y1, self.x2, self.y2 = x1, y1, x2, y2
+    def __repr__(self): return f"BHA_Line(({float(self.x1)}, {float(self.y1)}), ({float(self.x2)}, {float(self.y2)}))"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Line):
+            return (float(self.x1), float(self.y1), float(self.x2), float(self.y2)) == (float(o.x1), float(o.y1), float(o.x2), float(o.y2))
+        return NotImplemented
     def length(self):
         dx = float(self.x2) - float(self.x1); dy = float(self.y2) - float(self.y1)
         return (dx * dx + dy * dy) ** 0.5
@@ -1374,20 +1864,64 @@ class BHA_Line(BHA_Struct):
 
 class BHA_Polar(BHA_Struct):
     __BHAStructAttrs__ = {"angle": float, "radius": float}
+    def __init__(self, angle=0.0, radius=0.0):
+        if isinstance(angle, str):
+            r, a = angle.split("∠"); radius = float(r); angle = float(a)
+        elif isinstance(angle, (dict, BHA_Struct)):
+            d = angle.as_dict() if isinstance(angle, BHA_Struct) else angle
+            angle = d.get("angle", 0.0); radius = d.get("radius", 0.0)
+        self.angle, self.radius = angle, radius
+    def __repr__(self): return f"BHA_Polar({float(self.angle)}, {float(self.radius)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Polar): return float(self.angle) == float(o.angle) and float(self.radius) == float(o.radius)
+        return NotImplemented
+    def __str__(self): return "(" + str(float(self.angle)) + ", " + str(float(self.radius)) + ")"
     def to_xy(self):
         return BHA_Vec2(float(self.radius) * _math.cos(float(self.angle)), float(self.radius) * _math.sin(float(self.angle)))
 
 
 class BHA_HSV(BHA_Struct):
     __BHAStructAttrs__ = {"h": float, "s": float, "v": float}
+    def __init__(self, h=0.0, s=0.0, v=0.0):
+        if isinstance(h, str):
+            s2 = h.strip("hsv() ")
+            parts = [p.strip().rstrip("%") for p in s2.split(",")]
+            h = float(parts[0]) / 360.0; s = float(parts[1]) / 100.0; v = float(parts[2]) / 100.0
+        elif isinstance(h, (dict, BHA_Struct)):
+            d = h.as_dict() if isinstance(h, BHA_Struct) else h
+            h = d.get("h", 0.0); s = d.get("s", 0.0); v = d.get("v", 0.0)
+        self.h, self.s, self.v = h, s, v
+    def __repr__(self): return f"BHA_HSV({float(self.h)}, {float(self.s)}, {float(self.v)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_HSV): return (float(self.h), float(self.s), float(self.v)) == (float(o.h), float(o.s), float(o.v))
+        return NotImplemented
+    def __str__(self): return "(" + str(float(self.h)) + ", " + str(float(self.s)) + ", " + str(float(self.v)) + ")"
     def to_rgb(self):
         return tuple(max(0, min(255, round(c * 255))) for c in _colorsys.hsv_to_rgb(float(self.h), float(self.s), float(self.v)))
     def to_hex(self):
         return "#{:02X}{:02X}{:02X}".format(*self.to_rgb())
+    def to_colorf(self):
+        r, g, b = _colorsys.hsv_to_rgb(float(self.h), float(self.s), float(self.v))
+        return BHA_ColorF(r, g, b, 1.0)
 
 
 class BHA_HSVA(BHA_Struct):
     __BHAStructAttrs__ = {"h": float, "s": float, "v": float, "a": float}
+    def __init__(self, h=0.0, s=0.0, v=0.0, a=1.0):
+        if isinstance(h, str):
+            s2 = h.strip("hsva() ")
+            parts = [p.strip().rstrip("%") for p in s2.split(",")]
+            h = float(parts[0]) / 360.0; s = float(parts[1]) / 100.0; v = float(parts[2]) / 100.0
+            a = float(parts[3]) / 100.0 if len(parts) > 3 else 1.0
+        elif isinstance(h, (dict, BHA_Struct)):
+            d = h.as_dict() if isinstance(h, BHA_Struct) else h
+            h = d.get("h", 0.0); s = d.get("s", 0.0); v = d.get("v", 0.0); a = d.get("a", 1.0)
+        self.h, self.s, self.v, self.a = h, s, v, a
+    def __repr__(self): return f"BHA_HSVA({float(self.h)}, {float(self.s)}, {float(self.v)}, {float(self.a)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_HSVA): return (float(self.h), float(self.s), float(self.v), float(self.a)) == (float(o.h), float(o.s), float(o.v), float(o.a))
+        return NotImplemented
+    def __str__(self): return "(" + str(float(self.h)) + ", " + str(float(self.s)) + ", " + str(float(self.v)) + ", " + str(float(self.a)) + ")"
     def __init__(self, h=0.0, s=0.0, v=0.0, a=1.0):
         if isinstance(h, (dict, BHA_Struct)):
             d = h.as_dict() if isinstance(h, BHA_Struct) else h
@@ -1398,18 +1932,44 @@ class BHA_HSVA(BHA_Struct):
         return (max(0, min(255, round(r * 255))), max(0, min(255, round(g * 255))), max(0, min(255, round(b * 255))), max(0, min(255, round(float(self.a) * 255))))
     def to_hex(self):
         return "#{:02X}{:02X}{:02X}{:02X}".format(*self.to_rgba8())
+    def to_colorf(self):
+        r, g, b = _colorsys.hsv_to_rgb(float(self.h), float(self.s), float(self.v))
+        return BHA_ColorF(r, g, b, float(self.a))
 
 
 class BHA_Interval(BHA_Struct):
     __BHAStructAttrs__ = {"lo": float, "hi": float}
+    def __init__(self, lo=0.0, hi=0.0):
+        if isinstance(lo, str):
+            s = lo.strip("[]() ")
+            lo, hi = s.split(","); lo = float(lo); hi = float(hi)
+        elif isinstance(lo, (tuple, list)):
+            lo, hi = lo[0], lo[1]
+        elif isinstance(lo, (dict, BHA_Struct)):
+            d = lo.as_dict() if isinstance(lo, BHA_Struct) else lo
+            lo = d.get("lo", 0.0); hi = d.get("hi", 0.0)
+        self.lo, self.hi = lo, hi
+    def __repr__(self): return f"BHA_Interval({float(self.lo)}, {float(self.hi)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Interval): return float(self.lo) == float(o.lo) and float(self.hi) == float(o.hi)
+        return NotImplemented
+    def __str__(self): return "[" + str(float(self.lo)) + ", " + str(float(self.hi)) + "]"
     def contains(self, v): return float(self.lo) <= float(v) <= float(self.hi)
     def width(self): return float(self.hi) - float(self.lo)
 
 
 class BHA_Mat2(BHA_Struct):
     __BHAStructAttrs__ = {"m00": float, "m01": float, "m10": float, "m11": float}
+    def __repr__(self): return f"BHA_Mat2([[{float(self.m00)}, {float(self.m01)}], [{float(self.m10)}, {float(self.m11)}]])"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Mat2): return (float(self.m00), float(self.m01), float(self.m10), float(self.m11)) == (float(o.m00), float(o.m01), float(o.m10), float(o.m11))
+        return NotImplemented
     def __init__(self, m00=None, m01=None, m10=None, m11=None):
-        if isinstance(m00, (dict, BHA_Struct)):
+        if isinstance(m00, (list, tuple)) and len(m00) == 2 and isinstance(m00[0], (list, tuple)):
+            _rows = m00
+            m00, m01 = _rows[0][0], _rows[0][1]
+            m10, m11 = _rows[1][0], _rows[1][1]
+        elif isinstance(m00, (dict, BHA_Struct)):
             d = m00.as_dict() if isinstance(m00, BHA_Struct) else m00
             m00 = d.get("m00"); m01 = d.get("m01"); m10 = d.get("m10"); m11 = d.get("m11")
         if m00 is None and m01 is None and m10 is None and m11 is None:
@@ -1456,8 +2016,17 @@ class BHA_Mat2(BHA_Struct):
 
 class BHA_Mat3(BHA_Struct):
     __BHAStructAttrs__ = {f"m{i}{j}": float for i in range(3) for j in range(3)}
+    def __repr__(self): return f"BHA_Mat3([[{float(self.m00)}, {float(self.m01)}, {float(self.m02)}], [{float(self.m10)}, {float(self.m11)}, {float(self.m12)}], [{float(self.m20)}, {float(self.m21)}, {float(self.m22)}]])"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Mat3): return tuple(float(getattr(self, f"m{i}{j}")) for i in range(3) for j in range(3)) == tuple(float(getattr(o, f"m{i}{j}")) for i in range(3) for j in range(3))
+        return NotImplemented
     def __init__(self, m00=None, m01=None, m02=None, m10=None, m11=None, m12=None, m20=None, m21=None, m22=None):
-        if isinstance(m00, (dict, BHA_Struct)):
+        if isinstance(m00, (list, tuple)) and len(m00) == 3 and isinstance(m00[0], (list, tuple)):
+            _rows = m00
+            m00, m01, m02 = _rows[0][0], _rows[0][1], _rows[0][2]
+            m10, m11, m12 = _rows[1][0], _rows[1][1], _rows[1][2]
+            m20, m21, m22 = _rows[2][0], _rows[2][1], _rows[2][2]
+        elif isinstance(m00, (dict, BHA_Struct)):
             d = m00.as_dict() if isinstance(m00, BHA_Struct) else m00
             m00 = d.get("m00"); m01 = d.get("m01"); m02 = d.get("m02")
             m10 = d.get("m10"); m11 = d.get("m11"); m12 = d.get("m12")
@@ -1523,6 +2092,11 @@ class BHA_Mat3(BHA_Struct):
 
 class BHA_Transform(BHA_Struct):
     __BHAStructAttrs__ = {"position": BHA_Vec3, "rotation": BHA_Quaternion}
+    def __repr__(self): return f"BHA_Transform({self.position}, {self.rotation})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Transform): return self.position == o.position and self.rotation == o.rotation
+        return NotImplemented
+    def __str__(self): return "pos=" + str(self.position) + " rot=" + str(self.rotation)
     def __init__(self, position=None, rotation=None):
         if isinstance(position, dict):
             d = position
@@ -1536,18 +2110,33 @@ class BHA_Transform(BHA_Struct):
         if not isinstance(rotation, BHA_Struct):
             rotation = BHA_Quaternion(*rotation)
         self.position, self.rotation = position, rotation
-    def __repr__(self): return f"Transform(pos={self.position}, rot={self.rotation})"
 
 
 class BHA_ScreenPos(BHA_Struct):
     __BHAStructAttrs__ = {"x": int, "y": int, "z": int}
+    def __repr__(self): return f"BHA_ScreenPos({int(self.x)}, {int(self.y)}, {int(self.z)})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_ScreenPos): return (int(self.x), int(self.y), int(self.z)) == (int(o.x), int(o.y), int(o.z))
+        return NotImplemented
+    def __str__(self): return "(" + str(int(self.x)) + ", " + str(int(self.y)) + ", " + str(int(self.z)) + ")"
     def to_tuple(self): return (int(self.x), int(self.y), int(self.z))
 
 
 class BHA_Frequency(BHA_Struct):
     __BHAStructAttrs__ = {"hz": float, "unit": str}
+    def __repr__(self): return f"BHA_Frequency({float(self.hz)}, {self.unit!r})"
+    def __eq__(self, o):
+        if isinstance(o, BHA_Frequency): return float(self.hz) == float(o.hz) and self.unit == o.unit
+        return NotImplemented
+    def __str__(self): return str(float(self.hz)) + self.unit
     def __init__(self, hz=0.0, unit="hz"):
-        if isinstance(hz, (dict, BHA_Struct)):
+        if isinstance(hz, str):
+            i = 0
+            while i < len(hz) and (hz[i].isdigit() or hz[i] in ".-"):
+                i += 1
+            unit = hz[i:] if i < len(hz) else "hz"
+            hz = float(hz[:i]) if i > 0 else 0.0
+        elif isinstance(hz, (dict, BHA_Struct)):
             d = hz.as_dict() if isinstance(hz, BHA_Struct) else hz
             hz = d.get("hz", 0.0); unit = d.get("unit", "hz")
         self.hz, self.unit = hz, unit
@@ -1562,12 +2151,20 @@ class BHA_Frequency(BHA_Struct):
 class BHA_Version(BHA_Struct):
     __BHAStructAttrs__ = {"major": int, "minor": int, "patch": int}
     def __init__(self, major=0, minor=0, patch=0):
-        if isinstance(major, (dict, BHA_Struct)):
+        if isinstance(major, str):
+            parts = major.split(".")
+            major = int(parts[0]) if len(parts) > 0 else 0
+            minor = int(parts[1]) if len(parts) > 1 else 0
+            patch = int(parts[2]) if len(parts) > 2 else 0
+        elif isinstance(major, (dict, BHA_Struct)):
             d = major.as_dict() if isinstance(major, BHA_Struct) else major
             major = d.get("major", 0); minor = d.get("minor", 0); patch = d.get("patch", 0)
         self.major, self.minor, self.patch = major, minor, patch
     def __str__(self): return f"{int(self.major)}.{int(self.minor)}.{int(self.patch)}"
-    __repr__ = __str__
+    def __repr__(self): return f'BHA_Version("{self}")'
+    def __eq__(self, o):
+        if isinstance(o, BHA_Version): return (int(self.major), int(self.minor), int(self.patch)) == (int(o.major), int(o.minor), int(o.patch))
+        return NotImplemented
 import ctypes as _ct
 
 

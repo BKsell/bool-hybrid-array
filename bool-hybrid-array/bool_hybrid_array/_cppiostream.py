@@ -619,6 +619,8 @@ class filebuf:
                 self._mmap_obj = mmap.mmap(fd, map_size, access=access)
             else:
                 map_len = max(self._file_size, 4096) if self._write_mode else self._file_size
+                if self._write_mode:
+                    self._file.truncate(map_len)
                 self._mmap_obj = mmap.mmap(fd, map_len, access=access)
             return True
         except OSError:
