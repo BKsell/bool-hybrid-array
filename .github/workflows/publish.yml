@@ -54,6 +54,10 @@ jobs:
           open(p, "w", encoding="utf-8", newline="").write(s)
           PY
 
+      - name: Write build constraints
+        shell: bash
+        run: printf 'cython<3.3\n' > "$GITHUB_WORKSPACE/constraints.txt"
+
       - name: Build cp38 wheel (cibuildwheel 2.23.4)
         shell: bash
         env:
@@ -120,6 +124,10 @@ jobs:
           s = s[:i + len(marker)] + ver + s[j:]
           open(p, "w", encoding="utf-8", newline="").write(s)
           PY
+
+      - name: Write build constraints
+        shell: bash
+        run: printf 'cython<3.3\n' > "$GITHUB_WORKSPACE/constraints.txt"
 
       - name: Build wheel (cibuildwheel 4.3.0)
         shell: bash
