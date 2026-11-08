@@ -1,4 +1,0 @@
-# Build-time constraint: Cython 3.3.x emits an undefined __Pyx_ArgsSlice_FASTCALL_TPNEW call
-# for tp_new/__init__ slots, so the generated C fails to compile. Applied via PIP_CONSTRAINT
-# from the workflow only; pyproject.toml stays untouched.
-cython<3.3
