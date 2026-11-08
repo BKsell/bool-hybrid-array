@@ -70,14 +70,7 @@ jobs:
           CIBW_ENVIRONMENT_WINDOWS: "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
         run: |
           python -m pip install --upgrade "cibuildwheel==2.23.4"
-          python -m cibuildwheel bool-hybrid-array --output-dir wheelhouse > cibw.log 2>&1
-          rc=$?
-          if [ "$rc" -ne 0 ]; then
-            tail -n 150 cibw.log | tr '\n' '~' | sed 's/%/%25/g' | cut -c1-60000 > cibw_tail.txt
-            echo "::error title=CIBW_LOG_CP38_${{ matrix.os }}::$(cat cibw_tail.txt)"
-            tail -n 60 cibw.log
-            exit "$rc"
-          fi
+          python -m cibuildwheel bool-hybrid-array --output-dir wheelhouse 2>&1 | tee cibw.log
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
@@ -141,14 +134,7 @@ jobs:
           CIBW_ENVIRONMENT_WINDOWS: "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
         run: |
           python -m pip install --upgrade "cibuildwheel==4.3.0"
-          python -m cibuildwheel bool-hybrid-array --output-dir wheelhouse > cibw.log 2>&1
-          rc=$?
-          if [ "$rc" -ne 0 ]; then
-            tail -n 150 cibw.log | tr '\n' '~' | sed 's/%/%25/g' | cut -c1-60000 > cibw_tail.txt
-            echo "::error title=CIBW_LOG_${{ matrix.os }}_${{ matrix.pyver }}::$(cat cibw_tail.txt)"
-            tail -n 60 cibw.log
-            exit "$rc"
-          fi
+          python -m cibuildwheel bool-hybrid-array --output-dir wheelhouse 2>&1 | tee cibw.log
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
