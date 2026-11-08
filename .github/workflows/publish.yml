@@ -61,6 +61,9 @@ jobs:
           CIBW_MANYLINUX_X86_64_IMAGE: "quay.io/pypa/manylinux2014_x86_64:2025.04.19-1"
           CIBW_BEFORE_BUILD: 'python -m pip install "numpy>=1.19.0"'
           CIBW_BUILD_VERBOSITY: "1"
+          CIBW_ENVIRONMENT_LINUX: "PIP_CONSTRAINT=/project/constraints.txt"
+          CIBW_ENVIRONMENT_MACOS: "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
+          CIBW_ENVIRONMENT_WINDOWS: "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
         run: |
           python -m pip install --upgrade "cibuildwheel==2.23.4"
           python -m cibuildwheel bool-hybrid-array --output-dir wheelhouse > cibw.log 2>&1
@@ -125,6 +128,9 @@ jobs:
           CIBW_MANYLINUX_X86_64_IMAGE: ${{ (matrix.pyver == 'cp39' || matrix.pyver == 'cp310' || matrix.pyver == 'cp311') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'quay.io/pypa/manylinux_2_34_x86_64' }}
           CIBW_BEFORE_BUILD: 'python -m pip install "numpy>=1.19.0"'
           CIBW_BUILD_VERBOSITY: "1"
+          CIBW_ENVIRONMENT_LINUX: "PIP_CONSTRAINT=/project/constraints.txt"
+          CIBW_ENVIRONMENT_MACOS: "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
+          CIBW_ENVIRONMENT_WINDOWS: "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
         run: |
           python -m pip install --upgrade "cibuildwheel==4.3.0"
           python -m cibuildwheel bool-hybrid-array --output-dir wheelhouse > cibw.log 2>&1
