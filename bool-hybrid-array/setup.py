@@ -782,7 +782,7 @@ finally:
         "fast boolean",
         "sparse bitmap",
         "array",
-        )
+        ),
         package_data={
             "": ["README.md", "LICENSE", "NOTICE", "LICENSE-MulanPSL2" , 'BHA_Opener.7z',"setup.py","pyproject.toml"],
             "bool_hybrid_array": ["*.py"],
