@@ -74,11 +74,12 @@ jobs:
           python -m cibuildwheel bool-hybrid-array --output-dir wheelhouse 2>&1 | tee cibw.log
 
       - name: Upload wheel
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: wheel-cp38-${{ matrix.os }}
-          path: wheelhouse/*.whl
+          path: |
+            wheelhouse/*.whl
+            !wheelhouse/*py3-none*
           if-no-files-found: ignore
 
   build-wheels:
@@ -143,7 +144,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.os }}-${{ matrix.pyver }}
-          path: wheelhouse/*.whl
+          path: |
+            wheelhouse/*.whl
+            !wheelhouse/*py3-none*
+          if-no-files-found: ignore
 
   build-sdist:
     name: Build sdist
