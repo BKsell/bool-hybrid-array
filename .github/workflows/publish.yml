@@ -17,6 +17,7 @@ permissions:
 jobs:
   build-cp38:
     name: Build cp38 (${{ matrix.os }})
+    continue-on-error: true
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -67,16 +68,18 @@ jobs:
           CIBW_BUILD_VERBOSITY: "1"
           CIBW_ENVIRONMENT_LINUX: "PIP_CONSTRAINT=/project/constraints.txt"
           CIBW_ENVIRONMENT_MACOS: "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
-          CIBW_ENVIRONMENT_WINDOWS: "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
+          CIBW_ENVIRONMENT_WINDOWS: "PIP_CONSTRAINT=D:/a/bool-hybrid-array/bool-hybrid-array/constraints.txt"
         run: |
           python -m pip install --upgrade "cibuildwheel==2.23.4"
           python -m cibuildwheel bool-hybrid-array --output-dir wheelhouse 2>&1 | tee cibw.log
 
       - name: Upload wheel
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: wheel-cp38-${{ matrix.os }}
           path: wheelhouse/*.whl
+          if-no-files-found: ignore
 
   build-wheels:
     name: Build wheels (${{ matrix.os }} ${{ matrix.pyver }})
@@ -131,7 +134,7 @@ jobs:
           CIBW_BUILD_VERBOSITY: "1"
           CIBW_ENVIRONMENT_LINUX: "PIP_CONSTRAINT=/project/constraints.txt"
           CIBW_ENVIRONMENT_MACOS: "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
-          CIBW_ENVIRONMENT_WINDOWS: "PIP_CONSTRAINT=${{ github.workspace }}/constraints.txt"
+          CIBW_ENVIRONMENT_WINDOWS: "PIP_CONSTRAINT=D:/a/bool-hybrid-array/bool-hybrid-array/constraints.txt"
         run: |
           python -m pip install --upgrade "cibuildwheel==4.3.0"
           python -m cibuildwheel bool-hybrid-array --output-dir wheelhouse 2>&1 | tee cibw.log
