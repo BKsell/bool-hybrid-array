@@ -376,6 +376,14 @@ def _abc_impl_new():
         _splice(rows, edits)
         return ''.join(rows)
 
+    def _base_expr(node):
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            sub = _base_expr(node.value)
+            return None if sub is None else sub + '.' + node.attr
+        return None
+
     def _new_to_init(text: str):
         rows = text.splitlines(keepends=True)
         nl = '\r\n' if rows and rows[0].endswith('\r\n') else '\n'
@@ -385,7 +393,7 @@ def _abc_impl_new():
         for cls in tree.body:
             if not isinstance(cls, ast.ClassDef):
                 continue
-            if any(ast.unparse(b) in vals for b in cls.bases):
+            if any(_base_expr(b) in vals for b in cls.bases):
                 continue
             for m in cls.body:
                 if not isinstance(m, ast.FunctionDef) or m.name != '__new__':
@@ -658,6 +666,18 @@ def _abc_impl_new():
             i += 1
         return bom + ''.join(out), names, tails
 
+    _NOMINMAX_SHIM = '''cdef extern from *:
+    """
+    #ifdef min
+    #undef min
+    #endif
+    #ifdef max
+    #undef max
+    #endif
+    """
+
+'''
+
     def _rewrite_pyx(do_it: bool):
         converted = set()
         for py_src, pyx_src in zip(py_sources, pyx_files):
@@ -676,6 +696,10 @@ def _abc_impl_new():
             nxt = _def_to_cpdef(nxt, names)
             if tails:
                 nxt = nxt.rstrip('\n') + '\n\n' + _CDEF_HELPERS.strip('\n') + '\n\n' + '\n'.join(tails) + '\n'
+            if nxt[:1] == '\ufeff':
+                nxt = nxt[:1] + _NOMINMAX_SHIM + nxt[1:]
+            else:
+                nxt = _NOMINMAX_SHIM + nxt
             converted |= names
             if nxt != text:
                 open(pyx_src, 'wb').write(nxt.encode('utf-8'))
@@ -711,10 +735,10 @@ def _abc_impl_new():
         _rewrite_pyx(False)
         ext_modules = cythonize(_make_exts())
 
-except BaseException as e:
+except:
     ext_modules = []
     include_dirs = []
-    traceback.print_exception(type(e), e, e.__traceback__)
+    traceback.print_exc()
 
 finally:
     def get_long_description():

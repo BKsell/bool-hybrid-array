@@ -917,7 +917,7 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         if n <= 0:
             return BoolHybridArray(0, 0, False, Type, hash_)
         r &= (int(1) << n) - int(1)
-        true_count = r.bit_count()
+        true_count = r.bit_count() if hasattr(int, 'bit_count') else bin(r).count('1')
         is_sparse = true_count <= n - true_count
         arr = BoolHybridArray.__new__(BoolHybridArr)
         arr.large = []
