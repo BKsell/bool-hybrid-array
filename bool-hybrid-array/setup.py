@@ -806,7 +806,8 @@ finally:
         author="蔡靖杰",
         extras_require={
             "numba_opt": ["numba>=0.55.0"],
-            "cycy_opt": ["cycy-runtime>=0.2.5"]
+            "cycy_opt": ["cycy-runtime>=0.2.5"],
+            "CPU_opt": ["cupy>=13.4.0"]
         },
         author_email="1289270215@qq.com",
         description="一个高效的布尔数组（密集+稀疏混合存储，节省内存）",
