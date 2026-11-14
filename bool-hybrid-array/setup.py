@@ -1,5 +1,5 @@
 from setuptools import setup, find_packages, Extension
-import os,sys,shutil,atexit
+import os,sys,shutil,atexit,re
 import traceback
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -199,14 +199,27 @@ try:
 
     import builtins as _builtins
     import collections.abc as _cab
+    _SKIP_ABC_DUNDER = frozenset(('__subclasshook__', '__init_subclass__', '__class_getitem__',
+                                  '__new__', '__init__', '__slots__', '__dict__', '__weakref__',
+                                  '__module__', '__doc__', '__abstractmethods__'))
+    _SKIP_FLAGS = 0x04 | 0x08
+    _BLOCK_DEF = frozenset(('__new__', '__getattr__', '__setattr__', '__delattr__',
+                            '__getattribute__'))
 
     _CDEF_HELPERS = '''
+import collections.abc as _cabc_
 _CDEF_MRO_KEEP = []
 
 def _cdef_mro_patch(cls, base):
     import ctypes
+    bm = getattr(base, '__mro__', None)
+    if bm is None:
+        base = getattr(base, '__origin__', base)
+        bm = getattr(base, '__mro__', None)
+    if bm is None:
+        return cls
     old = [c for c in cls.__mro__[1:] if c is not object]
-    abc = [c for c in base.__mro__ if c is not object]
+    abc = [c for c in bm if c is not object]
     rest = [c for c in old if c not in abc]
     mro = (cls,) + tuple(abc) + tuple(rest) + (object,)
     words = (ctypes.c_void_p * 64).from_address(id(cls))
@@ -222,6 +235,9 @@ def _cdef_mro_patch(cls, base):
     for t in mro + (mro,):
         ctypes.pythonapi.Py_IncRef(ctypes.py_object(t))
     words[slot] = id(mro)
+    ctypes.pythonapi.PyType_Modified.argtypes = [ctypes.py_object]
+    ctypes.pythonapi.PyType_Modified.restype = None
+    ctypes.pythonapi.PyType_Modified(cls)
     base.register(type('_CDEF_Bump', (object,), {}))
     return cls
 
@@ -235,6 +251,15 @@ def _cdef_meta_retag(cls, meta):
 def _abc_impl_new():
     import abc
     return abc.ABCMeta('_CDEF_T', (object,), {}).__dict__['_abc_impl']
+
+def _cdef_set_dict(obj, d):
+    import ctypes
+    api = ctypes.pythonapi
+    api.PyObject_GenericSetDict.argtypes = [ctypes.py_object, ctypes.py_object, ctypes.c_void_p]
+    api.PyObject_GenericSetDict.restype = ctypes.c_int
+    if api.PyObject_GenericSetDict(obj, d, None) != 0:
+        raise TypeError('cannot set __dict__')
+    return d
 '''
 
     def _base_kind(name, converted):
@@ -316,14 +341,39 @@ def _abc_impl_new():
         rows = text.splitlines(keepends=True)
         tokens = list(tokenize.tokenize(BytesIO(text.encode('utf-8')).readline))
         edits = []
+        spans = []
         for i, t in enumerate(tokens):
             if t[0] != tokenize.NAME or i + 3 >= len(tokens):
                 continue
             if tokens[i + 1][1] != '.' or tokens[i + 2][1] != '__dict__':
                 continue
-            if tokens[i + 3][0] == tokenize.OP and tokens[i + 3][1] == '=':
-                continue
             if t[2][0] != tokens[i + 2][2][0]:
+                continue
+            if any(r == t[2][0] and c0 <= t[2][1] < c1 for r, c0, c1 in spans):
+                continue
+            if tokens[i + 3][0] == tokenize.OP and tokens[i + 3][1] == '=':
+                row = t[2][0]
+                if row <= len(rows):
+                    line = rows[row - 1]
+                    nl = '\r\n' if line.endswith('\r\n') else ('\n' if line.endswith('\n') else '')
+                    body = line[:len(line) - len(nl)] if nl else line
+                    rhs = body[tokens[i + 3][2][1] + 1:].strip()
+                    single = False
+                    no_nl = False
+                    for m in range(i + 4, len(tokens)):
+                        if tokens[m][0] == tokenize.NL:
+                            no_nl = True
+                            break
+                        if tokens[m][0] in (tokenize.NEWLINE, tokenize.ENDMARKER):
+                            single = tokens[m][2][0] == row
+                            break
+                    if single and not no_nl and rhs and '#' not in rhs \
+                            and '"' not in rhs and "'" not in rhs:
+                        rhs = re.sub(r'([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*__dict__',
+                                     r"object.__getattribute__(\1, '__dict__')", rhs)
+                        edits.append((row, t[2][1], len(body),
+                                      '_cdef_set_dict(' + t[1] + ', ' + rhs + ')'))
+                        spans.append((row, t[2][1], len(body)))
                 continue
             edits.append((t[2][0], t[2][1], tokens[i + 2][3][1],
                           'object.__getattribute__(' + t[1] + ", '__dict__')"))
@@ -384,55 +434,12 @@ def _abc_impl_new():
             return None if sub is None else sub + '.' + node.attr
         return None
 
-    def _new_to_init(text: str):
-        rows = text.splitlines(keepends=True)
-        nl = '\r\n' if rows and rows[0].endswith('\r\n') else '\n'
-        tree = ast.parse(text)
-        vals = ('float', 'int', 'str', 'bytes', 'tuple', 'bool')
-        spans = []
-        for cls in tree.body:
-            if not isinstance(cls, ast.ClassDef):
-                continue
-            if any(_base_expr(b) in vals for b in cls.bases):
-                continue
-            for m in cls.body:
-                if not isinstance(m, ast.FunctionDef) or m.name != '__new__':
-                    continue
-                targets = set()
-                ok = True
-                for sub in ast.walk(m):
-                    if isinstance(sub, ast.Assign):
-                        v = sub.value
-                        if isinstance(v, ast.Call) and isinstance(v.func, ast.Attribute) and v.func.attr == '__new__':
-                            for t in sub.targets:
-                                if isinstance(t, ast.Name):
-                                    targets.add(t.id)
-                    elif isinstance(sub, ast.Return):
-                        if not isinstance(sub.value, ast.Name) or sub.value.id not in targets:
-                            ok = False
-                if ok:
-                    spans.append((m.lineno, m.end_lineno))
-        if not spans:
-            return text
-        for a, b in spans:
-            for i in range(a - 1, b):
-                line = rows[i]
-                line = line.replace('def __new__(cls', 'def __init__(self')
-                line = line.replace('super().__new__(cls)', 'self')
-                body = line.strip()
-                if body.startswith('return ') and body[7:].strip().isidentifier():
-                    line = line[:len(line) - len(line.lstrip())] + 'return' + nl
-                elif body == 'self = self':
-                    line = line[:len(line) - len(line.lstrip())] + 'pass' + nl
-                rows[i] = line
-        return ''.join(rows)
-
     def _unwrap_hook_defaults(text: str):
         tree = ast.parse(text)
         rows = text.splitlines(keepends=True)
         nl = '\r\n' if rows and rows[0].endswith('\r\n') else '\n'
         stubs = {}
-        for cls in tree.body:
+        for cls in ast.walk(tree):
             if not isinstance(cls, ast.ClassDef):
                 continue
             for m in cls.body:
@@ -464,13 +471,6 @@ def _abc_impl_new():
                 else:
                     body = 'return ' + names[1] + ' in self'
                 stub = '_bha_hook_' + m.name
-                stubs.setdefault(m.end_lineno, []).extend([
-                    head + 'def ' + stub + params + ':' + nl,
-                    head + '    ' + body + nl,
-                    head + m.name + ' = ' + stub + nl,
-                ])
-        if not stubs:
-            return text
         out = []
         for i, line in enumerate(rows, 1):
             out.append(line)
@@ -524,11 +524,18 @@ def _abc_impl_new():
     def _class_to_cdef(text: str, converted: set):
         field_map = {}
         cls_members = {}
+        dict_classes = set()
         for node in ast.parse(text).body:
             if not isinstance(node, ast.ClassDef):
                 continue
             reserved = set()
             init = set()
+            for sub in ast.walk(node):
+                if isinstance(sub, ast.Assign):
+                    for tg in sub.targets:
+                        if isinstance(tg, ast.Attribute) and tg.attr == '__dict__' \
+                                and isinstance(tg.ctx, ast.Store):
+                            dict_classes.add(node.name)
             for m in node.body:
                 if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     reserved.add(m.name)
@@ -552,6 +559,15 @@ def _abc_impl_new():
         blocks = []
         tails = []
         names = set()
+        meta_names = set()
+        for i, tok in enumerate(tokens):
+            if tok[0] != tokenize.NAME or tok[1] != 'metaclass':
+                continue
+            j = i + 1
+            if j < len(tokens) and tokens[j][1] == '=':
+                j += 1
+            if j < len(tokens) and tokens[j][0] == tokenize.NAME:
+                meta_names.add(tokens[j][1])
         depth = 0
         for i, tok in enumerate(tokens):
             if tok[0] == tokenize.INDENT:
@@ -569,6 +585,8 @@ def _abc_impl_new():
                 continue
             kinds = [(b[1], _base_kind(b[1], converted | names)) for b in bases if b[1]]
             if any(kd == 'other' for _, kd in kinds):
+                continue
+            if name in meta_names or any(nm == 'type' for nm, _ in kinds):
                 continue
             abc_bases = [nm for nm, kd in kinds if kd == 'abc']
             if len(abc_bases) > 1:
@@ -601,7 +619,7 @@ def _abc_impl_new():
                         break
                 elif t[0] == tokenize.NAME and d2 == 1 and t[2][1] == indent:
                     if t[1] == 'class' or (t[1] == 'def' and m + 1 < len(tokens)
-                                           and tokens[m + 1][1] == '__new__'):
+                                           and tokens[m + 1][1] in _BLOCK_DEF):
                         blocking = True
                         break
                     if t[1] == '__slots__' and slot_span is None:
@@ -625,12 +643,14 @@ def _abc_impl_new():
             parent_fields = set()
             for b in keep:
                 parent_fields |= field_map.get(b, set())
-            own = [attr for attr in sorted(init_set)
+            if '__weakref__' not in parent_fields:
+                body_lines.append(' ' * indent + 'cdef object __weakref__')
+            own = [] if name in dict_classes else [attr for attr in sorted(init_set)
                    if not attr.startswith('__') and attr not in reserved
                    and attr not in parent_fields and attr not in slot_set]
             for attr in own:
                 body_lines.append(' ' * indent + 'cdef public object ' + attr)
-            field_map[name] = parent_fields | set(own) | set(slot_names)
+            field_map[name] = parent_fields | set(own) | set(slot_names) | {'__weakref__'}
             if meta_name is not None and not abc_bases:
                 body_lines.append(' ' * indent + '_abc_impl = _abc_impl_new()')
             blocks.append(('ins', ins_row, ins_row, body_lines))
@@ -638,8 +658,29 @@ def _abc_impl_new():
                 blocks.append(('rep', slot_span[0], slot_span[1],
                                [' ' * indent + 'cdef public object ' + s for s in slot_names]))
             if abc_bases:
+                _abc_cls = getattr(_cab, abc_bases[0].split('.')[-1], None)
+                if _abc_cls is not None:
+                    for _src in _abc_cls.__mro__:
+                        if _src is object or getattr(_src, '__module__', '') == 'builtins':
+                            continue
+                        for _nm, _fn in list(vars(_src).items()):
+                            if not (_nm.startswith('__') and _nm.endswith('__')):
+                                continue
+                            if _nm in _SKIP_ABC_DUNDER or _nm in reserved:
+                                continue
+                            if not callable(_fn) or getattr(_fn, '__isabstractmethod__', False):
+                                continue
+                            _code = getattr(_fn, '__code__', None)
+                            if _code is None or _code.co_flags & _SKIP_FLAGS or _code.co_argcount < 1:
+                                continue
+                            if getattr(_fn, '__defaults__', None) or getattr(_fn, '__kwdefaults__', None):
+                                continue
+                            _params = _code.co_varnames[:_code.co_argcount]
+                            body_lines.append(' ' * indent + 'def ' + _nm + '(' + ', '.join(_params) + '):')
+                            body_lines.append(' ' * (indent + 4) + 'return _cabc_.' + _src.__name__ + '.' + _nm
+                                              + '(' + ', '.join(_params) + ')')
                 tails.append('_cdef_mro_patch(' + name + ', ' + abc_bases[0] + ')')
-            if meta_name is not None:
+            if meta_name is not None and not abc_bases:
                 tails.append('_cdef_meta_retag(' + name + ', ' + meta_name + ')')
             names.add(name)
         for r, c0, c1, repl in sorted(marks, reverse=True):
@@ -688,18 +729,22 @@ def _abc_impl_new():
             text = raw.decode('utf-8')
             text = _dedupe_methods(text)
             text = _drop_slash(text)
-            text = _new_to_init(text)
             text = _extract_nested(text)
             text = _unwrap_hook_defaults(text)
             nxt, names, tails = _class_to_cdef(text, converted)
             nxt = _fix_dict(nxt)
             nxt = _def_to_cpdef(nxt, names)
             if tails:
-                nxt = nxt.rstrip('\n') + '\n\n' + _CDEF_HELPERS.strip('\n') + '\n\n' + '\n'.join(tails) + '\n'
-            if nxt[:1] == '\ufeff':
-                nxt = nxt[:1] + _NOMINMAX_SHIM + nxt[1:]
+                nxt = nxt.rstrip('\n') + '\n\n' + '\n'.join(tails) + '\n'
+            head = _NOMINMAX_SHIM + _CDEF_HELPERS.strip('\n') + '\n\n'
+            fi = nxt.find('\nfrom __future__ import')
+            if fi < 0:
+                nxt = head + nxt
             else:
-                nxt = _NOMINMAX_SHIM + nxt
+                eol = nxt.find('\n', fi + 1)
+                if eol < 0:
+                    eol = len(nxt)
+                nxt = nxt[:eol] + '\n' + head + nxt[eol:]
             converted |= names
             if nxt != text:
                 open(pyx_src, 'wb').write(nxt.encode('utf-8'))

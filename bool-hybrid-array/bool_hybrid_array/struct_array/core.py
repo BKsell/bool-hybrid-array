@@ -1090,6 +1090,7 @@ class BHA_Rect(BHA_Struct):
             x = d.get("x", 0); y = d.get("y", 0); w = d.get("w", 0); h = d.get("h", 0)
         self.x, self.y, self.w, self.h = x, y, w, h
     def __repr__(self): return f"BHA_Rect(({int(self.x)}, {int(self.y)}), {int(self.w)}, {int(self.h)})"
+    def __str__(self): return f"rect({int(self.x)}, {int(self.y)}, {int(self.w)}, {int(self.h)})"
     def area(self): return int(self.w) * int(self.h)
     def contains(self, x, y):
         return int(self.x) <= x < int(self.x) + int(self.w) and int(self.y) <= y < int(self.y) + int(self.h)
@@ -1146,7 +1147,7 @@ class BHA_Vec2(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_Vec2): return float(self.x) == float(o.x) and float(self.y) == float(o.y)
         return NotImplemented
-    def __str__(self): return "(" + str(float(self.x)) + ", " + str(float(self.y)) + ")"
+    def __str__(self): return f"vec2({float(self.x)}, {float(self.y)})"
     def dot(self, o): return float(self.x) * float(o.x) + float(self.y) * float(o.y)
     def length(self): return (float(self.x) ** 2 + float(self.y) ** 2) ** 0.5
     def normalized(self):
@@ -1174,7 +1175,7 @@ class BHA_Vec3(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_Vec3): return (float(self.x), float(self.y), float(self.z)) == (float(o.x), float(o.y), float(o.z))
         return NotImplemented
-    def __str__(self): return "(" + str(float(self.x)) + ", " + str(float(self.y)) + ", " + str(float(self.z)) + ")"
+    def __str__(self): return f"vec3({float(self.x)}, {float(self.y)}, {float(self.z)})"
     def dot(self, o): return float(self.x) * float(o.x) + float(self.y) * float(o.y) + float(self.z) * float(o.z)
     def cross(self, o):
         return BHA_Vec3(float(self.y) * float(o.z) - float(self.z) * float(o.y),
@@ -1208,7 +1209,7 @@ class BHA_Vec4(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_Vec4): return (float(self.x), float(self.y), float(self.z), float(self.w)) == (float(o.x), float(o.y), float(o.z), float(o.w))
         return NotImplemented
-    def __str__(self): return "(" + str(float(self.x)) + ", " + str(float(self.y)) + ", " + str(float(self.z)) + ", " + str(float(self.w)) + ")"
+    def __str__(self): return f"vec4({float(self.x)}, {float(self.y)}, {float(self.z)}, {float(self.w)})"
     def dot(self, o):
         return (float(self.x) * float(o.x) + float(self.y) * float(o.y)
                 + float(self.z) * float(o.z) + float(self.w) * float(o.w))
@@ -1236,7 +1237,7 @@ class BHA_Point(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_Point): return (int(self.x), int(self.y)) == (int(o.x), int(o.y))
         return NotImplemented
-    def __str__(self): return "(" + str(int(self.x)) + ", " + str(int(self.y)) + ")"
+    def __str__(self): return f"point({int(self.x)}, {int(self.y)})"
     def dot(self, o):
         return int(self.x) * int(o.x) + int(self.y) * int(o.y)
     def length(self):
@@ -1260,7 +1261,7 @@ class BHA_Point3D(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_Point3D): return (int(self.x), int(self.y), int(self.z)) == (int(o.x), int(o.y), int(o.z))
         return NotImplemented
-    def __str__(self): return "(" + str(int(self.x)) + ", " + str(int(self.y)) + ", " + str(int(self.z)) + ")"
+    def __str__(self): return f"point({int(self.x)}, {int(self.y)}, {int(self.z)})"
     def dot(self, o):
         return int(self.x) * int(o.x) + int(self.y) * int(o.y) + int(self.z) * int(o.z)
     def length(self):
@@ -1284,7 +1285,7 @@ class BHA_Quaternion(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_Quaternion): return (float(self.x), float(self.y), float(self.z), float(self.w)) == (float(o.x), float(o.y), float(o.z), float(o.w))
         return NotImplemented
-    def __str__(self): return "(" + str(float(self.x)) + ", " + str(float(self.y)) + ", " + str(float(self.z)) + ", " + str(float(self.w)) + ")"
+    def __str__(self): return f"quat({float(self.x)}, {float(self.y)}, {float(self.z)}, {float(self.w)})"
     def __init__(self, x=0.0, y=0.0, z=0.0, w=1.0):
         if isinstance(x, (dict, BHA_Struct)):
             d = x.as_dict() if isinstance(x, BHA_Struct) else x
@@ -1361,6 +1362,7 @@ class BHA_Range(BHA_Struct):
         return NotImplemented
     def __repr__(self):
         return f"BHA_Range({int(self.start)}, {int(self.stop)}, {int(self.step)})"
+    def __str__(self): return f"range({int(self.start)}, {int(self.stop)}, {int(self.step)})"
     def contains(self, v): return v in self
     def length(self): return len(self)
     def to_slice(self): return slice(int(self.start), int(self.stop), int(self.step))
@@ -1430,6 +1432,7 @@ class BHA_FRange(BHA_Struct):
         return NotImplemented
     def __repr__(self):
         return f"BHA_FRange({float(self.start)}, {float(self.stop)}, {float(self.step)})"
+    def __str__(self): return f"frange({float(self.start)}, {float(self.stop)}, {float(self.step)})"
 
 
 class BHA_Time(BHA_Struct):
@@ -1648,6 +1651,7 @@ class BHA_BBox(BHA_Struct):
             min_x = d.get("min_x", 0); min_y = d.get("min_y", 0); max_x = d.get("max_x", 0); max_y = d.get("max_y", 0)
         self.min_x, self.min_y, self.max_x, self.max_y = min_x, min_y, max_x, max_y
     def __repr__(self): return f"BHA_BBox(({int(self.min_x)}, {int(self.min_y)}), ({int(self.max_x)}, {int(self.max_y)}))"
+    def __str__(self): return f"bbox(({int(self.min_x)}, {int(self.min_y)}), ({int(self.max_x)}, {int(self.max_y)}))"
     def __eq__(self, o):
         if isinstance(o, BHA_BBox):
             return (int(self.min_x), int(self.min_y), int(self.max_x), int(self.max_y)) == (int(o.min_x), int(o.min_y), int(o.max_x), int(o.max_y))
@@ -1662,7 +1666,7 @@ class BHA_UV(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_UV): return float(self.u) == float(o.u) and float(self.v) == float(o.v)
         return NotImplemented
-    def __str__(self): return "(" + str(float(self.u)) + ", " + str(float(self.v)) + ")"
+    def __str__(self): return f"uv({float(self.u)}, {float(self.v)})"
     def flip_v(self): return BHA_UV(float(self.u), 1.0 - float(self.v))
     def __add__(self, o):
         if set(o.__BHAStructAttrs__) != {"u", "v"}:
@@ -1681,7 +1685,7 @@ class BHA_ColorF(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_ColorF): return (float(self.r), float(self.g), float(self.b), float(self.a)) == (float(o.r), float(o.g), float(o.b), float(o.a))
         return NotImplemented
-    def __str__(self): return "(" + str(float(self.r)) + ", " + str(float(self.g)) + ", " + str(float(self.b)) + ", " + str(float(self.a)) + ")"
+    def __str__(self): return f"rgba({float(self.r)}, {float(self.g)}, {float(self.b)}, {float(self.a)})"
     def __init__(self, r=0.0, g=0.0, b=0.0, a=1.0):
         if isinstance(r, str):
             s = r.lstrip('#')
@@ -1808,6 +1812,7 @@ class BHA_Circle(BHA_Struct):
             x = d.get("x", 0.0); y = d.get("y", 0.0); r = d.get("r", 0.0)
         self.x, self.y, self.r = x, y, r
     def __repr__(self): return f"BHA_Circle(({float(self.x)}, {float(self.y)}), {float(self.r)})"
+    def __str__(self): return f"circle(({float(self.x)}, {float(self.y)}), {float(self.r)})"
     def __eq__(self, o):
         if isinstance(o, BHA_Circle):
             return (float(self.x), float(self.y), float(self.r)) == (float(o.x), float(o.y), float(o.r))
@@ -1828,6 +1833,7 @@ class BHA_Sphere(BHA_Struct):
             x = d.get("x", 0.0); y = d.get("y", 0.0); z = d.get("z", 0.0); r = d.get("r", 0.0)
         self.x, self.y, self.z, self.r = x, y, z, r
     def __repr__(self): return f"BHA_Sphere(({float(self.x)}, {float(self.y)}, {float(self.z)}), {float(self.r)})"
+    def __str__(self): return f"sphere(({float(self.x)}, {float(self.y)}, {float(self.z)}), {float(self.r)})"
     def __eq__(self, o):
         if isinstance(o, BHA_Sphere):
             return (float(self.x), float(self.y), float(self.z), float(self.r)) == (float(o.x), float(o.y), float(o.z), float(o.r))
@@ -1851,6 +1857,7 @@ class BHA_Line(BHA_Struct):
             x1 = d.get("x1", 0.0); y1 = d.get("y1", 0.0); x2 = d.get("x2", 0.0); y2 = d.get("y2", 0.0)
         self.x1, self.y1, self.x2, self.y2 = x1, y1, x2, y2
     def __repr__(self): return f"BHA_Line(({float(self.x1)}, {float(self.y1)}), ({float(self.x2)}, {float(self.y2)}))"
+    def __str__(self): return f"line(({float(self.x1)}, {float(self.y1)}), ({float(self.x2)}, {float(self.y2)}))"
     def __eq__(self, o):
         if isinstance(o, BHA_Line):
             return (float(self.x1), float(self.y1), float(self.x2), float(self.y2)) == (float(o.x1), float(o.y1), float(o.x2), float(o.y2))
@@ -1875,7 +1882,7 @@ class BHA_Polar(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_Polar): return float(self.angle) == float(o.angle) and float(self.radius) == float(o.radius)
         return NotImplemented
-    def __str__(self): return "(" + str(float(self.angle)) + ", " + str(float(self.radius)) + ")"
+    def __str__(self): return f"{float(self.radius)}∠{float(self.angle)}"
     def to_xy(self):
         return BHA_Vec2(float(self.radius) * _math.cos(float(self.angle)), float(self.radius) * _math.sin(float(self.angle)))
 
@@ -1895,7 +1902,7 @@ class BHA_HSV(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_HSV): return (float(self.h), float(self.s), float(self.v)) == (float(o.h), float(o.s), float(o.v))
         return NotImplemented
-    def __str__(self): return "(" + str(float(self.h)) + ", " + str(float(self.s)) + ", " + str(float(self.v)) + ")"
+    def __str__(self): return f"hsv({float(self.h)*360:.0f}, {float(self.s)*100:.0f}%, {float(self.v)*100:.0f}%)"
     def to_rgb(self):
         return tuple(max(0, min(255, round(c * 255))) for c in _colorsys.hsv_to_rgb(float(self.h), float(self.s), float(self.v)))
     def to_hex(self):
@@ -1921,12 +1928,7 @@ class BHA_HSVA(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_HSVA): return (float(self.h), float(self.s), float(self.v), float(self.a)) == (float(o.h), float(o.s), float(o.v), float(o.a))
         return NotImplemented
-    def __str__(self): return "(" + str(float(self.h)) + ", " + str(float(self.s)) + ", " + str(float(self.v)) + ", " + str(float(self.a)) + ")"
-    def __init__(self, h=0.0, s=0.0, v=0.0, a=1.0):
-        if isinstance(h, (dict, BHA_Struct)):
-            d = h.as_dict() if isinstance(h, BHA_Struct) else h
-            h = d.get("h", 0.0); s = d.get("s", 0.0); v = d.get("v", 0.0); a = d.get("a", 1.0)
-        self.h, self.s, self.v, self.a = h, s, v, a
+    def __str__(self): return f"hsva({float(self.h)*360:.0f}, {float(self.s)*100:.0f}%, {float(self.v)*100:.0f}%, {float(self.a)*100:.0f}%)"
     def to_rgba8(self):
         r, g, b = _colorsys.hsv_to_rgb(float(self.h), float(self.s), float(self.v))
         return (max(0, min(255, round(r * 255))), max(0, min(255, round(g * 255))), max(0, min(255, round(b * 255))), max(0, min(255, round(float(self.a) * 255))))
@@ -1961,6 +1963,7 @@ class BHA_Interval(BHA_Struct):
 class BHA_Mat2(BHA_Struct):
     __BHAStructAttrs__ = {"m00": float, "m01": float, "m10": float, "m11": float}
     def __repr__(self): return f"BHA_Mat2([[{float(self.m00)}, {float(self.m01)}], [{float(self.m10)}, {float(self.m11)}]])"
+    def __str__(self): return f"[[{float(self.m00)}, {float(self.m01)}], [{float(self.m10)}, {float(self.m11)}]]"
     def __eq__(self, o):
         if isinstance(o, BHA_Mat2): return (float(self.m00), float(self.m01), float(self.m10), float(self.m11)) == (float(o.m00), float(o.m01), float(o.m10), float(o.m11))
         return NotImplemented
@@ -2017,6 +2020,7 @@ class BHA_Mat2(BHA_Struct):
 class BHA_Mat3(BHA_Struct):
     __BHAStructAttrs__ = {f"m{i}{j}": float for i in range(3) for j in range(3)}
     def __repr__(self): return f"BHA_Mat3([[{float(self.m00)}, {float(self.m01)}, {float(self.m02)}], [{float(self.m10)}, {float(self.m11)}, {float(self.m12)}], [{float(self.m20)}, {float(self.m21)}, {float(self.m22)}]])"
+    def __str__(self): return f"[[{float(self.m00)}, {float(self.m01)}, {float(self.m02)}], [{float(self.m10)}, {float(self.m11)}, {float(self.m12)}], [{float(self.m20)}, {float(self.m21)}, {float(self.m22)}]]"
     def __eq__(self, o):
         if isinstance(o, BHA_Mat3): return tuple(float(getattr(self, f"m{i}{j}")) for i in range(3) for j in range(3)) == tuple(float(getattr(o, f"m{i}{j}")) for i in range(3) for j in range(3))
         return NotImplemented
@@ -2118,7 +2122,7 @@ class BHA_ScreenPos(BHA_Struct):
     def __eq__(self, o):
         if isinstance(o, BHA_ScreenPos): return (int(self.x), int(self.y), int(self.z)) == (int(o.x), int(o.y), int(o.z))
         return NotImplemented
-    def __str__(self): return "(" + str(int(self.x)) + ", " + str(int(self.y)) + ", " + str(int(self.z)) + ")"
+    def __str__(self): return f"screen({int(self.x)}, {int(self.y)}, {int(self.z)})"
     def to_tuple(self): return (int(self.x), int(self.y), int(self.z))
 
 

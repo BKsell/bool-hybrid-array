@@ -878,6 +878,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         return not self == other
 
     def __and__(self, other) -> BoolHybridArray:
+        if not isinstance(self, BoolHybridArray):
+            return other & self
         if type(other) == int:
             other = abs(other)
             other = map(int,f"{other:0{self.size}b}")
@@ -959,6 +961,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         return self._bits_to_int()
 
     def __or__(self, other:Iterable) -> BoolHybridArray:
+        if not isinstance(self, BoolHybridArray):
+            return other | self
         if type(other) == int:
             other = abs(other)
             other = map(int,f"{other:0{self.size}b}")
@@ -1011,6 +1015,8 @@ class BoolHybridArray(MutableSequence,Exception,metaclass=ResurrectMeta):
         return self & other
 
     def __xor__(self, other:Iterable) -> BoolHybridArray:
+        if not isinstance(self, BoolHybridArray):
+            return other ^ self
         if type(other) == int:
             other = abs(other)
             other = map(int,f"{other:0{self.size}b}")
@@ -2323,7 +2329,7 @@ class BHAX_Descriptor(metaclass=ResurrectMeta):
         return f"<BHAX_Descriptor dataset_root='{self._root}'>"
 
 class ProtectedBuiltinsDict(dict,metaclass=ResurrectMeta):
-    def __new__(cls, *args, protected_names = (("T", "F","Ask_arr","Ask_BHA","Create_BHA","temp2","BHA_Queue","numba_opt","namespace")+tuple(globals())),
+    def __new__(cls, *args, protected_names = (("T", "F","Ask_arr","Ask_BHA","Create_BHA","temp2","BHA_Queue","numba_opt","namespace", "BHA_lazy_sieve", "GPU_opt")+tuple(globals())),
                 name = 'builtins', **kwargs):
         self = super().__new__(cls)
         dict.__init__(self, *args, **kwargs)
@@ -2682,3 +2688,6 @@ class BHA_lazy_sieve(metaclass=ResurrectMeta):
         return (self.primes, self._limit, self._n, self._last, self._started, self._pos)
     def __setstate__(self, state):
         self.primes, self._limit, self._n, self._last, self._started, self._pos = state
+def GPU_opt():
+    global np
+    import cupy as np

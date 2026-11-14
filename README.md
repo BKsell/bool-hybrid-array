@@ -634,9 +634,20 @@ print(len(s))  # 输出：2
 print([(int(p.x), int(p.y)) for p in s])  # 输出：[(2, 2), (3, 3)]（按键升序）
 
 #forest（9.13.12版本新增）
+
 from bool_hybrid_array.forest import *
+
 #以后使用任何库都不需要import了！类似pyforest，但更强大！第三方库也支持！
 
+#cjx纯文本压缩算法（9.13.12版本新增）
+
+from bool_hybrid_array import cjx
+
+x = cjx.encode("Hello CJX！"*100)
+
+print(len(x))
+
+print(encode(x)[:15])
 ```
 
 ## 性能优势
@@ -893,7 +904,7 @@ from bool_hybrid_array.forest import *
 
 * **9.13.11**：修复bug，优化性能，加强MT-XOR25的安全性
 
-* **9.13.12**：新增forest子模块
+* **9.13.12**：新增forest子模块、GPU_obt、cjx编码
 
 
 ## **彩蛋：**
